@@ -18,10 +18,10 @@ class EnemyNPC extends hz.Component<typeof EnemyNPC> {
     console.log(
       `EnemyNPC collided with entity owned by player: ${owner?.name.get()}`
     );
-    if (otherEntity.getComponents(EnemyNPC).length > 0) {
-      console.log("Collided with another EnemyNPC, ignoring.");
-      return;
-    }
+    // if (otherEntity.getComponents(EnemyNPC).length > 0) {
+    //   console.log("Collided with another EnemyNPC, ignoring.");
+    //   return;
+    // }
   }
 }
 hz.Component.register(EnemyNPC);

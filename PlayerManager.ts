@@ -1,5 +1,4 @@
 import * as hz from "horizon/core";
-import { VARIABLE_GROUPS } from "constants";
 import {
   EventsService,
   QuestItemCollected,
@@ -13,9 +12,6 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
   state: Omit<PlayerInitialState, "player"> | null = null;
 
   preStart(): void {
-    console.log(
-      "[PlayerManager] preStart — connecting QuestItemCollected listener (client)"
-    );
 
     this.connectNetworkBroadcastEvent(
       EventsService.PlayerEvents.QuestItemCollected,
@@ -137,6 +133,7 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
     );
     // Additional initialization logic can go here
     this.state = {
+      isTutorialCompleted: payload.isTutorialCompleted,
       isStorageInitialized: payload.isStorageInitialized,
       wearables: payload.wearables,
     };

@@ -18,7 +18,7 @@ class CollectableQuestItem extends hz.Component<typeof CollectableQuestItem> {
 
   private depositItemToPlayerInventory(player: hz.Player) {
     const payload = { entity: this.entity, player, amount: 1 as const };
-    console.log(`[CollectableQuestItem] - Depositing item to player ${player.name.get()}'s inventory.`);
+    console.log(`[CollectableQuestItem] - Emit Event: depositItemToPlayerInventory`);
     this.sendNetworkBroadcastEvent(EventsService.PlayerEvents.QuestItemCollected, payload);
   }
 }
