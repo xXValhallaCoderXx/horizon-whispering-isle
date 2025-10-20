@@ -1,6 +1,6 @@
 import * as hz from 'horizon/core';
 import { Binding, Pressable, Text, UIComponent, UINode, View } from 'horizon/ui';
-import { DialogEvents } from 'NPC';
+import { DialogEvents } from './NPC';
 
 export type DialogContainer = {
   title?: string;

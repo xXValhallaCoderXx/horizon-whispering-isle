@@ -57,6 +57,16 @@ export type PlayerInitialState = {
     player: hz.Player;
 }
 
+export type QuestPayload = {
+    player: hz.Player;
+    questId: string;
+};
+export type CheckQuestSubmissionPayload = {
+    player: hz.Player;
+
+    itemType: string;      // 'coconut', 'wood', etc.
+    amount: number;
+};
 export class EventsService {
 
     static readonly PlayerEvents = {
@@ -72,6 +82,9 @@ export class EventsService {
 
     static readonly QuestEvents = {
         SubmitQuestCollectProgress: new hz.LocalEvent<{ player: hz.Player; itemId: string; amount: number }>("SubmitQuestCollectProgress"),
+        CheckPlayerQuestSubmission: new hz.LocalEvent<CheckQuestSubmissionPayload>(),
+        QuestStarted: new hz.LocalEvent<QuestPayload>(),
+        QuestCompleted: new hz.LocalEvent<QuestPayload>(),
     }
 
 
