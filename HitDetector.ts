@@ -31,16 +31,24 @@ class HitDetector extends hz.Component<typeof HitDetector> {
       }
     );
 
-    // Detect collisions with weapons
-    this.connectCodeBlockEvent(
-      this.entity,
-      hz.CodeBlockEvents.OnEntityCollision,
-      (otherEntity: hz.Entity) => this.onEntityCollision(otherEntity)
-    );
+    // Detect collisions with weapons on this entity and all children
+    this.connectCollisionHandlersRecursive(this.entity);
   }
 
   start() {
 
+  }
+
+  private connectCollisionHandlersRecursive(entity: hz.Entity) {
+    this.connectCodeBlockEvent(
+      entity,
+      hz.CodeBlockEvents.OnEntityCollision,
+      (otherEntity: hz.Entity) => this.onEntityCollision(otherEntity)
+    );
+    try {
+      const kids = entity.children.get();
+      for (const k of kids) this.connectCollisionHandlersRecursive(k);
+    } catch {}
   }
 
   private onEntityCollision(otherEntity: hz.Entity) {
@@ -74,9 +82,18 @@ class HitDetector extends hz.Component<typeof HitDetector> {
   }
 
   private resolveWeaponFromEntity(entity: hz.Entity): any {
-    // Check if entity has BaseWeapon component
-    const weaponComponents = entity.getComponents(BaseWeapon);
-    return weaponComponents.length > 0 ? weaponComponents[0] : null;
+    // Check entity and parents for BaseWeapon
+    let cur: hz.Entity | null = entity;
+    for (let i = 0; i < 8 && cur; i++) {
+      try {
+        const comps = cur.getComponents(BaseWeapon);
+        if (comps && comps.length > 0) return comps[0];
+      } catch {}
+      try {
+        cur = cur.parent.get();
+      } catch { cur = null; }
+    }
+    return null;
   }
 }
 hz.Component.register(HitDetector);
