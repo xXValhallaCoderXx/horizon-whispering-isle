@@ -51,13 +51,16 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     }
 
     let progressed = false;
+    const completedNow: QuestObjective[] = [];
     for (const obj of matching) {
       const inc = amount || 0;
       const before = obj.currentCount;
-      obj.currentCount = Math.min(obj.targetCount, obj.currentCount + inc);
-      if (obj.currentCount !== before) progressed = true;
-      if (obj.currentCount >= obj.targetCount) {
+      const after = Math.min(obj.targetCount, obj.currentCount + inc);
+      obj.currentCount = after;
+      if (after !== before) progressed = true;
+      if (after >= obj.targetCount && !obj.isCompleted) {
         obj.isCompleted = true;
+        completedNow.push(obj);
         console.log(`[QuestManager] Objective completed: ${obj.objectiveId}`);
       } else {
         console.log(`[QuestManager] Objective progress '${obj.objectiveId}': ${obj.currentCount}/${obj.targetCount}`);
@@ -68,6 +71,11 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       // SFX/VFX for the collector prior to destroy
       this.playCollectionSoundForPlayer(player, entityId);
       this.playCollectionVfxForPlayer(player, entityId);
+
+      // If this action completed one or more objectives, notify the player
+      if (completedNow.length > 0) {
+        this.notifyObjectiveCompletion(player, quest, completedNow);
+      }
 
       if (entityId != null) {
         this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
@@ -125,6 +133,22 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       };
       particle.play(options);
     } catch {}
+  }
+
+  private notifyObjectiveCompletion(player: hz.Player, quest: Quest, completedObjectives: QuestObjective[]) {
+    try {
+      // Reuse collectSound as completion cue
+      this.playCollectionSoundForPlayer(player);
+
+      const completedNames = completedObjectives.map(o => o.description || o.objectiveId).join(', ');
+      const next = quest.objectives.find((o: QuestObjective) => !o.isCompleted);
+      const nextMsg = next ? `Next: ${next.description}` : `Quest complete!`;
+      this.world.ui.showPopupForPlayer(
+        player,
+        `Objective complete: ${completedNames}\n${nextMsg}`,
+        3
+      );
+    } catch { }
   }
 
   private completeTutorialForPlayer(player: hz.Player) {

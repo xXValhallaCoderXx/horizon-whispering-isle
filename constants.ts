@@ -137,9 +137,9 @@ export const QUEST_DEFINITIONS: Record<string, Quest> = {
                 objectiveId: 'collect_coconuts',
                 type: ObjectiveType.Collect,
                 targetType: 'coconut',
-                targetCount: 5,
+                targetCount: 2,
                 currentCount: 0,
-                description: 'Collect 5 coconuts',
+                description: 'Collect 1 coconuts',
                 isCompleted: false,
             },
             {
