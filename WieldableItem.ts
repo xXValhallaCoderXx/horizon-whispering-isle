@@ -92,10 +92,16 @@ class WieldableItem extends hz.Component<typeof WieldableItem> {
 
   // No reattempt timers needed when anchor is correctly configured in editor
 
-  private onAttached(_player: hz.Player) {
-    // Attachment succeeded: finalize holster state
-    try { this.entity.simulated.set(false); } catch { }
-    try { this.entity.collidable.set(false); } catch { }
+  private onAttached(player: hz.Player) {
+    // Attachment succeeded: finalize holster state per device
+    try {
+      const device = player?.deviceType?.get?.();
+      const isVR = device === hz.PlayerDeviceType.VR;
+      // In VR, keep simulation and collisions enabled so you can physically grab from torso.
+      // On Desktop/Mobile, disable both to avoid stray physics while holstered.
+      this.entity.simulated.set(!!isVR);
+      this.entity.collidable.set(!!isVR);
+    } catch { }
   }
 }
 hz.Component.register(WieldableItem);
