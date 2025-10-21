@@ -1,5 +1,6 @@
 import * as hz from 'horizon/core';
 import * as ab from 'horizon/unity_asset_bundles';
+import { EventsService, QuestPayload } from './constants';
 
 /**
  * NpcManager: encapsulates NPC animation + attention loop logic.
@@ -12,6 +13,9 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
         npcRoot: { type: hz.PropTypes.Entity, default: undefined },
         // Optional: directly reference the AssetBundle Gizmo entity if you know it
         npcAssetBundle: { type: hz.PropTypes.Entity, default: undefined },
+
+        // Quest that disables attention for players who accepted it
+        questIdToDisableAttention: { type: hz.PropTypes.String, default: 'tutorial_survival' },
 
         // Attention loop configuration
         attentionLoopEnabled: { type: hz.PropTypes.Boolean, default: true },
@@ -28,8 +32,13 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
     private loopActive_ = false;
     private players_: hz.Player[] = [];
     private dialogOpenPlayers_ = new Set<hz.Player>();
+    private acceptedPlayers_ = new Set<hz.Player>();
 
     start() {
+        // Listen for quest lifecycle to gate attention per-player
+        this.connectLocalBroadcastEvent(EventsService.QuestEvents.QuestStarted, (payload: QuestPayload) => this.onQuestStarted(payload));
+        this.connectLocalBroadcastEvent(EventsService.QuestEvents.QuestCompleted, (payload: QuestPayload) => this.onQuestCompleted(payload));
+
         this.resolveAssetAndStart();
     }
 
@@ -70,6 +79,14 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
         }
     }
 
+    // Optional: allow direct notification from NPC when quest accepted
+    public setQuestAccepted(player: hz.Player, questId: string) {
+        if (this.isQuestOfInterest(questId)) {
+            this.acceptedPlayers_.add(player);
+            this.recomputeLoopActivity();
+        }
+    }
+
     // --- Internal loop ---
     private scheduleNextEmote() {
         if (!this.loopActive_) return;
@@ -92,12 +109,12 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
                     this.playAttentionSoundForPlayers(nonDialogEligibles);
                 }
             } else {
-                // No one in dialog: always animate; play sound only if eligibles nearby
-                const name = this.chooseRandom(this.props.attentionEmotes ?? []);
-                if (name && this.assetRef_) {
-                    try { this.assetRef_.setAnimationParameterTrigger(name, false); } catch (e) { console.warn('NpcManager: Failed to trigger animation', name, e); }
-                }
+                // No one in dialog: animate only if there are eligible players nearby
                 if (eligibles.length > 0) {
+                    const name = this.chooseRandom(this.props.attentionEmotes ?? []);
+                    if (name && this.assetRef_) {
+                        try { this.assetRef_.setAnimationParameterTrigger(name, false); } catch (e) { console.warn('NpcManager: Failed to trigger animation', name, e); }
+                    }
                     this.playAttentionSoundForPlayers(eligibles);
                 }
             }
@@ -139,7 +156,11 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
     }
 
     // Replace with your real per-player logic
-    private playerNeedsAttention(_player: hz.Player): boolean { return true; }
+    private playerNeedsAttention(player: hz.Player): boolean {
+        // If player has accepted the quest of interest, they don't need idle attention
+        if (this.acceptedPlayers_.has(player)) return false;
+        return true;
+    }
 
     private chooseRandom<T>(arr: ReadonlyArray<T>): T | undefined {
         if (!arr || arr.length === 0) return undefined;
@@ -176,24 +197,29 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
         // Track players for proximity eligibility
         this.connectCodeBlockEvent(this.entity, hz.CodeBlockEvents.OnPlayerEnterWorld, (player: hz.Player) => {
             this.players_.push(player);
+            this.recomputeLoopActivity();
         });
         this.connectCodeBlockEvent(this.entity, hz.CodeBlockEvents.OnPlayerExitWorld, (player: hz.Player) => {
             const idx = this.players_.indexOf(player);
             if (idx >= 0) this.players_.splice(idx, 1);
+            // Remove from accepted/dialog sets to avoid leaks
+            this.dialogOpenPlayers_.delete(player);
+            this.acceptedPlayers_.delete(player);
+            this.recomputeLoopActivity();
         });
 
         // Wait for UAB + root ready before starting (best-effort)
         const tryStartWhenReady = (attempts: number) => {
             const ready = (abg?.isLoaded?.() ?? true) && (ref?.isLoaded?.() ?? true);
             if (ready) {
-                if (this.props.attentionLoopEnabled) this.async.setTimeout(() => this.startAttentionLoop(), 50);
+                if (this.props.attentionLoopEnabled) this.async.setTimeout(() => this.recomputeLoopActivity(), 50);
                 // Optional: log available animator parameters once on first start
                 try { const params = this.assetRef_?.getAnimationParameters?.(); params && console.log('NpcManager: Animator params', params); } catch { }
                 return;
             }
             if (attempts <= 0) {
                 console.warn('NpcManager: Asset not reported ready; starting loop anyway');
-                if (this.props.attentionLoopEnabled) this.async.setTimeout(() => this.startAttentionLoop(), 50);
+                if (this.props.attentionLoopEnabled) this.async.setTimeout(() => this.recomputeLoopActivity(), 50);
                 return;
             }
             this.async.setTimeout(() => tryStartWhenReady(attempts - 1), 100);
@@ -227,6 +253,51 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
             }
         } catch { /* ignore */ }
         return undefined;
+    }
+
+    // --- Quest gating helpers ---
+    private isQuestOfInterest(questId: string | undefined): boolean {
+        const target = (this.props.questIdToDisableAttention ?? '').trim();
+        if (!target) return false;
+        return (questId ?? '').trim() === target;
+    }
+
+    private onQuestStarted(payload: QuestPayload) {
+        if (!payload?.player) return;
+        if (this.isQuestOfInterest(payload.questId)) {
+            this.acceptedPlayers_.add(payload.player);
+            this.recomputeLoopActivity();
+        }
+    }
+
+    private onQuestCompleted(payload: QuestPayload) {
+        if (!payload?.player) return;
+        if (this.isQuestOfInterest(payload.questId)) {
+            // When quest completes, attention could be re-enabled; adjust to design needs
+            this.acceptedPlayers_.delete(payload.player);
+            this.recomputeLoopActivity();
+        }
+    }
+
+    private anyNonAcceptedPlayersInWorld(): boolean {
+        for (const p of this.players_) {
+            if (!this.acceptedPlayers_.has(p)) return true;
+        }
+        return false;
+    }
+
+    private recomputeLoopActivity() {
+        if (!this.props.attentionLoopEnabled) {
+            if (this.loopActive_) this.stopAttentionLoop();
+            return;
+        }
+
+        const shouldRun = this.anyNonAcceptedPlayersInWorld();
+        if (shouldRun && !this.loopActive_) {
+            this.startAttentionLoop();
+        } else if (!shouldRun && this.loopActive_) {
+            this.stopAttentionLoop();
+        }
     }
 }
 
