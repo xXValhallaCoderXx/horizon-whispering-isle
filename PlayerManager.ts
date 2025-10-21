@@ -13,10 +13,10 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
 
   preStart(): void {
 
-    this.connectNetworkBroadcastEvent(
-      EventsService.PlayerEvents.QuestItemCollected,
-      (payload: QuestItemCollected) => this.questItemCollected(payload)
-    );
+    // this.connectNetworkBroadcastEvent(
+    //   EventsService.PlayerEvents.QuestItemCollected,
+    //   (payload: QuestItemCollected) => this.questItemCollected(payload)
+    // );
 
     // On Player Enter World
     this.connectCodeBlockEvent(
@@ -71,45 +71,45 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
     // });
   }
 
-  private questItemCollected(payload: QuestItemCollected) {
-    if (!this.owner) {
-      console.error(
-        "[PlayerManager] No current player to process QuestItemCollected."
-      );
-      return;
-    }
-    const isStorageInitialized = this.isStorageInitialized();
+  // private questItemCollected(payload: QuestItemCollected) {
+  //   if (!this.owner) {
+  //     console.error(
+  //       "[PlayerManager] No current player to process QuestItemCollected."
+  //     );
+  //     return;
+  //   }
+  //   const isStorageInitialized = this.isStorageInitialized();
 
-    if (isStorageInitialized) {
-      console.log(
-        `[PlayerManager] Player ${this.owner.name.get()} collected item: `,
-        payload.entity
-      );
-      const entityId = (payload.entity as any)?.id;
-      this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, {
-        entityId,
-        player: this.owner,
-      });
-    } else {
-      console.warn(
-        "[PlayerManager] Player storage not initialized. Ignoring QuestItemCollected event."
-      );
-    }
-  }
+  //   if (isStorageInitialized) {
+  //     console.log(
+  //       `[PlayerManager] Player ${this.owner.name.get()} collected item: `,
+  //       payload.entity
+  //     );
+  //     const entityId = (payload.entity as any)?.id;
+  //     this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, {
+  //       entityId,
+  //       player: this.owner,
+  //     });
+  //   } else {
+  //     console.warn(
+  //       "[PlayerManager] Player storage not initialized. Ignoring QuestItemCollected event."
+  //     );
+  //   }
+  // }
 
-  private isStorageInitialized(): boolean {
-    if (!this.owner) {
-      console.error("[PlayerManager] No current player to initialize.");
-      return false;
-    }
+  // private isStorageInitialized(): boolean {
+  //   if (!this.owner) {
+  //     console.error("[PlayerManager] No current player to initialize.");
+  //     return false;
+  //   }
 
-    // TODOD - Maybe do runtime checks
-    if (this.state?.isStorageInitialized !== 1) {
-      return false;
-    } else {
-      return true;
-    }
-  }
+  //   // TODOD - Maybe do runtime checks
+  //   if (this.state?.isStorageInitialized !== 1) {
+  //     return false;
+  //   } else {
+  //     return true;
+  //   }
+  // }
 
   private fetchInitialState(player: hz.Player) {
     if (!player) {

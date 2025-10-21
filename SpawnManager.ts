@@ -71,7 +71,6 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
 
   // ---- Timers ----
   private startSpawnTimerForCoconuts() {
-    console.error("[CollectibleSpawnManager] Starting spawn timer");
 
     const tick = () => {
       // console.log("[CollectibleSpawnManager] Spawn timer tick", this.spawnConfig);

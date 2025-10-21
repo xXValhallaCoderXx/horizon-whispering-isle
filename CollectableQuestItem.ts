@@ -2,7 +2,10 @@ import * as hz from "horizon/core";
 import { EventsService } from "constants";
 
 class CollectableQuestItem extends hz.Component<typeof CollectableQuestItem> {
-  static propsDefinition = {};
+  static propsDefinition = {
+    // Optional override; defaults to 'coconut' if blank/undefined
+    itemId: { type: hz.PropTypes.String, default: 'coconut' },
+  };
 
   currentPlayer: hz.Player | null = null;
 
@@ -17,9 +20,18 @@ class CollectableQuestItem extends hz.Component<typeof CollectableQuestItem> {
   start() { }
 
   private depositItemToPlayerInventory(player: hz.Player) {
-    const payload = { entity: this.entity, player, amount: 1 as const };
     console.log(`[CollectableQuestItem] - Emit Event: depositItemToPlayerInventory`);
-    this.sendNetworkBroadcastEvent(EventsService.PlayerEvents.QuestItemCollected, payload);
+
+    // Structured quest progress for QuestManager (local broadcast)
+    const id = (typeof this.props.itemId === 'string' && this.props.itemId.trim().length > 0)
+      ? this.props.itemId.trim()
+      : 'coconut';
+    this.sendNetworkBroadcastEvent(EventsService.QuestEvents.SubmitQuestCollectProgress, {
+      player,
+      itemId: id,
+      amount: 1,
+    });
+
   }
 }
 hz.Component.register(CollectableQuestItem);

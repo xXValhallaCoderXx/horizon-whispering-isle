@@ -81,7 +81,8 @@ export class EventsService {
     }
 
     static readonly QuestEvents = {
-        SubmitQuestCollectProgress: new hz.LocalEvent<{ player: hz.Player; itemId: string; amount: number }>("SubmitQuestCollectProgress"),
+        // Use NetworkEvent so client-side item scripts can notify the server QuestManager
+        SubmitQuestCollectProgress: new hz.NetworkEvent<{ player: hz.Player; itemId: string; amount: number }>("SubmitQuestCollectProgress"),
         CheckPlayerQuestSubmission: new hz.LocalEvent<CheckQuestSubmissionPayload>(),
         QuestStarted: new hz.LocalEvent<QuestPayload>(),
         QuestCompleted: new hz.LocalEvent<QuestPayload>(),
