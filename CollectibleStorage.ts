@@ -62,8 +62,7 @@ class CollectibleStorage extends hz.Component<typeof CollectibleStorage> {
     // Optionally restrict future grabs to this player
     try { this.entity.as(hz.GrabbableEntity)?.setWhoCanGrab([player]); } catch { }
 
-    // Also signal as a quest item "collection" so QuestManager can mark has-bag
-    this.sendNetworkBroadcastEvent(EventsService.PlayerEvents.QuestItemCollected, { entity: this.entity, player, amount: 1 });
+    // No legacy QuestItemCollected event; quest progress flows through SubmitQuestCollectProgress.
   }
 
   private handleQuestCollection(entity: hz.Entity) {

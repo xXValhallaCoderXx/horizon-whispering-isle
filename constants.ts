@@ -38,11 +38,6 @@ export const VARIABLE_GROUPS = {
 
 
 
-export type QuestItemCollected = {
-    player: hz.Player;
-    entity: hz.Entity;
-    amount: number;
-};
 
 export type QuestSubmitCollectProgress = {
     player: hz.Player;
@@ -72,7 +67,6 @@ export type CheckQuestSubmissionPayload = {
 export class EventsService {
 
     static readonly PlayerEvents = {
-        QuestItemCollected: new hz.LocalEvent<QuestItemCollected>("QuestItemCollected"),
         FetchInitialState: new hz.LocalEvent<{ player: hz.Player }>("FetchInitialState"),
         RecievedInitialState: new hz.LocalEvent<PlayerInitialState>("RecievedInitialState"),
     }
@@ -88,9 +82,7 @@ export class EventsService {
         CheckPlayerQuestSubmission: new hz.LocalEvent<CheckQuestSubmissionPayload>(),
         QuestStarted: new hz.LocalEvent<QuestPayload>(),
         QuestCompleted: new hz.LocalEvent<QuestPayload>(),
-        // Dialog can ask the server for the player's current quest stage
-        RequestPlayerStage: new hz.LocalEvent<{ player: hz.Player }>("RequestPlayerStage"),
-        PlayerStageResponse: new hz.LocalEvent<{ player: hz.Player; stage: string }>("PlayerStageResponse"),
+        // (Legacy quest stage request/response removed; dialog should derive from objective state through QuestManager APIs.)
     }
 
 
@@ -100,6 +92,89 @@ export class EventsService {
         console.log(`[EventsService] ${eventName}:`, JSON.stringify(payload, null, 2));
     }
 }
+
+// ---- Quest Types ----
+export enum ObjectiveType {
+    Collect = 'Collect',
+    Talk = 'Talk',
+    Hunt = 'Hunt',
+}
+
+export enum QuestStatus {
+    NotStarted = 'NotStarted',
+    InProgress = 'InProgress',
+    Completed = 'Completed',
+}
+
+export interface QuestObjective {
+    objectiveId: string;
+    type: ObjectiveType;
+    targetType: string; // e.g., 'coconut', 'npc:pineapple', 'chicken'
+    targetCount: number;
+    currentCount: number;
+    description: string;
+    isCompleted: boolean;
+}
+
+export interface Quest {
+    questId: string;
+    name: string;
+    description: string;
+    objectives: QuestObjective[];
+    status: QuestStatus;
+    isOptional: boolean;
+    reward: number;
+}
+
+// Baseline quest definitions; clone before use to avoid mutating these.
+export const QUEST_DEFINITIONS: Record<string, Quest> = {
+    tutorial_survival: {
+        questId: 'tutorial_survival',
+        name: 'Island Survival Basics',
+        description: 'Learn to gather resources on the island',
+        objectives: [
+            {
+                objectiveId: 'collect_coconuts',
+                type: ObjectiveType.Collect,
+                targetType: 'coconut',
+                targetCount: 5,
+                currentCount: 0,
+                description: 'Collect 5 coconuts',
+                isCompleted: false,
+            },
+            {
+                objectiveId: 'talk_to_npc',
+                type: ObjectiveType.Talk,
+                targetType: 'npc:pineapple',
+                targetCount: 1,
+                currentCount: 0,
+                description: 'Great! Now, talk to Pineapple for an update',
+                isCompleted: false,
+            },
+            {
+                objectiveId: 'hunt_chicken',
+                type: ObjectiveType.Hunt,
+                targetType: 'chicken',
+                targetCount: 1,
+                currentCount: 0,
+                description: 'Hunt a chicken for meat',
+                isCompleted: false,
+            },
+            {
+                objectiveId: 'gather_wood',
+                type: ObjectiveType.Collect,
+                targetType: 'wood',
+                targetCount: 10,
+                currentCount: 0,
+                description: 'Gather 10 wood from trees',
+                isCompleted: false,
+            },
+        ],
+        status: QuestStatus.NotStarted,
+        isOptional: false,
+        reward: 100,
+    },
+};
 
 
 export interface PlayerState {

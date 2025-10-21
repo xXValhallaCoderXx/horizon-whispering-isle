@@ -1,6 +1,6 @@
 import * as hz from 'horizon/core';
 import { VARIABLE_GROUPS } from 'constants';
-import { EventsService, QuestSubmitCollectProgress, QuestPayload } from 'constants';
+import { EventsService, QuestSubmitCollectProgress, QuestPayload, QUEST_DEFINITIONS, Quest, QuestObjective, ObjectiveType, QuestStatus } from 'constants';
 import { PlayerStateService } from 'PlayerStateService';
 
 class QuestManager extends hz.Component<typeof QuestManager> {
@@ -14,24 +14,15 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   };
 
   // In-memory per-player quest state (non-persistent for now)
-  private playerStage = new Map<hz.Player, 'NotStarted' | 'Collecting' | 'ReturnToNPC' | 'Hunting' | 'Complete'>();
+  // Active quest state per player (deep-cloned from definitions)
+  private activeQuestByPlayer = new Map<hz.Player, Quest>();
   private playerHasBag = new Map<hz.Player, boolean>();
   private spawnedBagByPlayer = new Map<hz.Player, hz.Entity>();
-  private coconutCounts = new Map<hz.Player, number>();
 
   preStart(): void {
     this.connectNetworkBroadcastEvent(
       EventsService.QuestEvents.SubmitQuestCollectProgress,
       this.checkQuestCollectionSubmission.bind(this)
-    );
-
-    // Dialog asks for player stage -> respond with known state (defaults to NotStarted)
-    this.connectLocalBroadcastEvent(
-      EventsService.QuestEvents.RequestPlayerStage,
-      ({ player }: { player: hz.Player }) => {
-        const stage = this.playerStage.get(player) ?? 'NotStarted';
-        this.sendLocalBroadcastEvent(EventsService.QuestEvents.PlayerStageResponse, { player, stage });
-      }
     );
 
     // When tutorial quest is started, mark stage and spawn bag
@@ -48,30 +39,49 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   private checkQuestCollectionSubmission(payload: QuestSubmitCollectProgress): boolean {
     const { itemId, player, amount, entityId } = payload;
     console.log(`[QuestManager] - Checking quest collection submission for item: ${itemId} by player: ${player.name.get()} with amount: ${amount}`);
-    const stage = this.playerStage.get(player) ?? 'NotStarted';
-    console.log(`[QuestManager] - Current stage for player ${player.name.get()} is ${stage}`);
-    console.log(`[QuestManager] - itemId: ${itemId}, amount: ${amount}`);
-    if (stage !== 'Collecting') return false;
-    if (itemId !== 'coconut') return false;
-    const prev = this.coconutCounts.get(player) ?? 0;
-    console.log(`[QuestManager] Previous coconut count for ${player.name.get()}: ${prev}`);
-    const next = prev + (amount || 0);
-    this.coconutCounts.set(player, next);
-    console.log(`[QuestManager] ${player.name.get()} coconut progress: ${next}/5`);
 
-    // Play collection sound for this player at the item's position if configured
-    // Play collection sound & VFX for this player (before destroy)
-    this.playCollectionSoundForPlayer(player, entityId);
-    this.playCollectionVfxForPlayer(player, entityId);
+    const quest = this.ensureActiveQuest(player, 'tutorial_survival');
+    if (!quest) return false;
 
-    console.log(`[QuestManager] - Emitting event: SubmitQuestCollectProgress: `, entityId);
-    if (entityId != null) {
-      this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+    // Find relevant objectives for this item type
+    const matching = quest.objectives.filter((o: QuestObjective) => !o.isCompleted && o.type === ObjectiveType.Collect && o.targetType === itemId);
+    if (matching.length === 0) {
+      console.log(`[QuestManager] No matching collect objectives for item '${itemId}'.`);
+      return false;
     }
 
-    if (next >= 5) {
-      this.playerStage.set(player, 'ReturnToNPC');
-      console.log(`[QuestManager] ${player.name.get()} reached required coconuts. Return to NPC.`);
+    let progressed = false;
+    for (const obj of matching) {
+      const inc = amount || 0;
+      const before = obj.currentCount;
+      obj.currentCount = Math.min(obj.targetCount, obj.currentCount + inc);
+      if (obj.currentCount !== before) progressed = true;
+      if (obj.currentCount >= obj.targetCount) {
+        obj.isCompleted = true;
+        console.log(`[QuestManager] Objective completed: ${obj.objectiveId}`);
+      } else {
+        console.log(`[QuestManager] Objective progress '${obj.objectiveId}': ${obj.currentCount}/${obj.targetCount}`);
+      }
+    }
+
+    if (progressed) {
+      // SFX/VFX for the collector prior to destroy
+      this.playCollectionSoundForPlayer(player, entityId);
+      this.playCollectionVfxForPlayer(player, entityId);
+
+      if (entityId != null) {
+        this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+      }
+
+      // Check if all objectives done -> quest completed
+      const allDone = quest.objectives.every((o: QuestObjective) => o.isCompleted);
+      if (allDone) {
+        quest.status = QuestStatus.Completed;
+        console.log(`[QuestManager] Quest completed: ${quest.questId}`);
+        this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestCompleted, { player, questId: quest.questId });
+      } else {
+        quest.status = QuestStatus.InProgress;
+      }
       return true;
     }
     return false;
@@ -124,14 +134,10 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   private async onQuestStarted(payload: QuestPayload) {
     const { player, questId } = payload;
     if (!player || !questId) return;
-    // Only handle our tutorial quest here; future quests can expand logic
-    if (questId === 'tutorial_survival') {
-      // Move to Collecting stage
-      this.playerStage.set(player, 'Collecting');
-      this.playerHasBag.set(player, false);
-      // Spawn the storage bag for this player to collect
-      await this.spawnStorageBagForPlayer(player);
-    }
+    const quest = this.ensureActiveQuest(player, questId, true);
+    if (!quest) return;
+    this.playerHasBag.set(player, false);
+    await this.spawnStorageBagForPlayer(player);
   }
 
   private async spawnStorageBagForPlayer(player: hz.Player) {
@@ -156,7 +162,31 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     }
   }
 
+  // Ensure the player has an active quest instance cloned from the definitions
+  private ensureActiveQuest(player: hz.Player, questId: string, createIfMissing: boolean = false): Quest | null {
+    let quest = this.activeQuestByPlayer.get(player);
+    if (!quest || quest.questId !== questId) {
+      if (!createIfMissing) return null;
+      const def = QUEST_DEFINITIONS[questId];
+      if (!def) return null;
+      quest = deepCloneQuest(def);
+      this.activeQuestByPlayer.set(player, quest);
+    }
+    return quest;
+  }
+
+  // Legacy stage helpers removed; dialog should query quest/objective state directly moving forward.
+
 
 
 }
 hz.Component.register(QuestManager);
+
+// Utilities – clone a quest definition and ensure per-player state
+function deepCloneQuest(def: Quest): Quest {
+  return {
+    ...def,
+    objectives: def.objectives.map(o => ({ ...o })),
+  };
+}
+

@@ -1,7 +1,6 @@
 import * as hz from "horizon/core";
 import {
   EventsService,
-  QuestItemCollected,
   PlayerInitialState,
 } from "constants";
 

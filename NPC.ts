@@ -46,28 +46,14 @@ export class NPC extends hz.Component<typeof NPC> {
 
 
   private onOptionReceived(player: hz.Player, key: number[]) {
-    // Determine player's quest stage via optional events (fallback to NotStarted)
-    let stage: QuestStage | null = null;
-    const qsAny: any = EventsService.QuestEvents as any;
-    if (qsAny && qsAny.RequestPlayerStage && qsAny.PlayerStageResponse) {
-      const sub = this.connectLocalBroadcastEvent(qsAny.PlayerStageResponse, (resp: { player: hz.Player, stage: QuestStage }) => {
-        if (resp.player === player) stage = resp.stage;
-      });
-      this.sendLocalBroadcastEvent(qsAny.RequestPlayerStage, { player });
-      sub.disconnect();
-    }
-
-    // Widen type to avoid literal-narrowing
-    const stageForDialog: QuestStage = ((stage ?? ('NotStarted' as unknown as string)) as unknown) as QuestStage;
-
-    // Use stage-aware dialog if available; fallback to static
-    let dialog = this.scriptData?.getDialogFromTreeForStage(stageForDialog, key) ?? this.scriptData?.getDialogFromTree(key)
+    // With legacy stage removed, default to dialog without stage gating
+    const dialog = this.scriptData?.getDialogFromTree(key)
 
     // Trigger quest only when player confirms (presses closing option)
     const questOnCloseId = this.scriptData?.getQuestIdOnClose(key);
     if (!dialog) {
       // Dialog closed: perform side-effects depending on stage
-      if (questOnCloseId && stageForDialog === 'NotStarted') {
+      if (questOnCloseId) {
         this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestStarted, { player, questId: questOnCloseId });
 
         // Inform NpcManager immediately for per-player gating
@@ -85,15 +71,14 @@ export class NPC extends hz.Component<typeof NPC> {
         soundGizmo && soundGizmo.play(options);
       }
 
-      if (stageForDialog === 'ReturnToNPC') {
-        // Complete talk objective by emitting a quest submission with npc token
-        const npcName = ((this.props.name as string) || '').toLowerCase();
-        this.sendLocalBroadcastEvent(EventsService.QuestEvents.CheckPlayerQuestSubmission, {
-          player,
-          itemType: `npc:${npcName}`,
-          amount: 1,
-        });
-      }
+      // If your dialog step implies talking to NPC completes an objective,
+      // emit a CheckPlayerQuestSubmission using npc token.
+      const npcName = ((this.props.name as string) || '').toLowerCase();
+      this.sendLocalBroadcastEvent(EventsService.QuestEvents.CheckPlayerQuestSubmission, {
+        player,
+        itemType: `npc:${npcName}`,
+        amount: 1,
+      });
     }
     if (dialog) {
       dialog.title = this.props.name
