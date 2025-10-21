@@ -39,12 +39,6 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       EventsService.QuestEvents.QuestStarted,
       (payload: QuestPayload) => this.onQuestStarted(payload)
     );
-
-    // When any quest item is collected, see if it's the player's bag
-    // this.connectLocalBroadcastEvent(
-    //   EventsService.PlayerEvents.QuestItemCollected,
-    //   ({ player, entity }: { player: hz.Player; entity: hz.Entity }) => this.onAnyItemCollected(player, entity)
-    // );
   }
 
   start() {
