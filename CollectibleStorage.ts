@@ -62,22 +62,22 @@ class CollectibleStorage extends hz.Component<typeof CollectibleStorage> {
     // Optionally restrict future grabs to this player
     try { this.entity.as(hz.GrabbableEntity)?.setWhoCanGrab([player]); } catch { }
 
-    // Notify systems: storage initialized/holstered for this player
-    this.sendNetworkBroadcastEvent(EventsService.PlayerEvents.StorageInitialized, { player });
-
     // Also signal as a quest item "collection" so QuestManager can mark has-bag
     this.sendNetworkBroadcastEvent(EventsService.PlayerEvents.QuestItemCollected, { entity: this.entity, player, amount: 1 });
   }
 
   private handleQuestCollection(entity: hz.Entity) {
     if (this.owner) {
-      // TODO  Display toast or some feedback to the player
+      // Submit using new quest collection flow handled by QuestManager
+      const itemId = 'coconut'; // Default item type supported by this storage
+      const rawId: any = (entity as any)?.id;
+      const entityId = typeof rawId === 'bigint' ? rawId.toString() : String(rawId);
       console.log(
-        `[CollectibleStorage] - Submitting quest item collection for item: ${entity.name.get()} by player: ${this.owner.name.get()}`
+        `[CollectibleStorage] - Submitting quest item collection for item: ${entity.name.get()} (entityId=${entityId}) by player: ${this.owner.name.get()}`
       );
       this.sendNetworkBroadcastEvent(
-        EventsService.PlayerEvents.QuestItemCollected,
-        { entity, player: this.owner, amount: 1 }
+        EventsService.QuestEvents.SubmitQuestCollectProgress,
+        { player: this.owner, itemId, amount: 1, entityId }
       );
     } else {
       console.error(

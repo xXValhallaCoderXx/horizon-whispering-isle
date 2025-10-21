@@ -73,7 +73,6 @@ export class EventsService {
 
     static readonly PlayerEvents = {
         QuestItemCollected: new hz.LocalEvent<QuestItemCollected>("QuestItemCollected"),
-        StorageInitialized: new hz.LocalEvent<{ player: hz.Player }>("StorageInitialized"),
         FetchInitialState: new hz.LocalEvent<{ player: hz.Player }>("FetchInitialState"),
         RecievedInitialState: new hz.LocalEvent<PlayerInitialState>("RecievedInitialState"),
     }

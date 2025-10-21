@@ -113,58 +113,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     }
   }
 
-  private onAnyItemCollected(player: hz.Player, entity: hz.Entity) {
-    const bag = this.spawnedBagByPlayer.get(player);
-    if (bag && bag === entity) {
-      this.playerHasBag.set(player, true);
-      // Optional: hide or destroy bag now that it's collected
-      try { bag.visible.set(false); bag.simulated.set(false); } catch { }
-      this.spawnedBagByPlayer.delete(player);
-      console.log(`[QuestManager] ${player.name.get()} collected their storage bag.`);
-      // Persist hasStorageBag using PlayerStateService
-      const svc = this.findPlayerStateService();
-      svc?.setHasStorageBag(player, true);
-      return;
-    }
 
-    // Coconut collection handling: count when in Collecting stage
-    const stage = this.playerStage.get(player);
-    if (stage === 'Collecting') {
-      const prev = this.coconutCounts.get(player) ?? 0;
-      const next = prev + 1;
-      this.coconutCounts.set(player, next);
-      console.log(`[QuestManager] ${player.name.get()} coconut progress: ${next}/5`);
-      if (next >= 5) {
-        this.playerStage.set(player, 'ReturnToNPC');
-        console.log(`[QuestManager] ${player.name.get()} reached required coconuts. Return to NPC.`);
-      }
-    }
-  }
 
-  private findPlayerStateService(): PlayerStateService | null {
-    // Heuristic: assume there's a configured PlayerStateService entity in the scene.
-    // If you have a dedicated entity reference, wire it here. For now, search parent tree.
-    try {
-      // Check this entity
-      const here = this.entity.getComponents(PlayerStateService)[0];
-      if (here) return here;
-      const parent = this.entity.parent.get();
-      if (!parent) return null;
-      return this.findPlayerStateServiceIn(parent, 2);
-    } catch { return null; }
-  }
-
-  private findPlayerStateServiceIn(node: hz.Entity, depth: number): PlayerStateService | null {
-    if (depth < 0) return null;
-    try {
-      const here = node.getComponents(PlayerStateService)[0];
-      if (here) return here;
-      for (const child of node.children.get() || []) {
-        const found = this.findPlayerStateServiceIn(child, depth - 1);
-        if (found) return found;
-      }
-    } catch { }
-    return null;
-  }
 }
 hz.Component.register(QuestManager);

@@ -15,13 +15,7 @@ class WorldManager extends Component<typeof WorldManager> {
   preStart(): void {
     this.connectCodeBlockEvent(this.entity, CodeBlockEvents.OnPlayerEnterWorld, this.playerEnterWorld)
     this.connectCodeBlockEvent(this.entity, CodeBlockEvents.OnPlayerExitWorld, this.playerExitWorld)
-    // this.connectNetworkBroadcastEvent(
-    //   EventsService.PlayerEvents.StorageInitialized,
-    //   (payload: { player: hz.Player }) => {
-    //     console.log(`[WorldManager] Received PlayerStorageInitialized for player ${payload.player.name.get()}`);
-    //     this.setPlayerStorageInitialized(payload.player);
-    //   }
-    // );
+
 
     // this.connectNetworkBroadcastEvent(
     //   EventsService.PlayerEvents.FetchInitialState,
