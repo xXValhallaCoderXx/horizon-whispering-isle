@@ -71,6 +71,66 @@ export type QuestProgressUpdatedPayload = {
     stage: string; // e.g., 'NotStarted' | 'Collecting' | 'ReturnToNPC' | 'Hunting' | 'Complete'
     quest?: Quest; // optional snapshot of quest state
 };
+
+
+/* COMBAT TYPES */
+
+export type AttackStartPayload = {
+    weaponId: string;
+    attackerPlayer: hz.Player;
+    attackId: string;          // unique per swing
+    stats: WeaponStats;
+    timestamp: number;
+}
+
+export type AttackEndPayload = {
+    weaponId: string;
+    attackerPlayer: hz.Player;
+    attackId: string;
+    timestamp: number;
+}
+
+export type HitPayload = {
+    attackId: string;
+    attackerPlayer: hz.Player;
+    targetNpcId: string;
+    weaponId: string;
+    hitPos: hz.Vec3;
+    timestamp: number;
+}
+
+export type ApplyDamagePayload = {
+    targetNpcId: string;
+    amount: number;
+    attackerPlayer: hz.Player;
+    weaponId: string;
+    attackId: string;
+    timestamp: number;
+}
+
+export type DiedPayload = {
+    targetNpcId: string;
+    enemyType: string;
+    killerPlayer: hz.Player | null;
+    timestamp: number;
+}
+
+export type HuntProgressPayload = {
+    player: hz.Player;
+    enemyType: string;
+    increment: number;        // usually 1
+    timestamp: number;
+}
+
+export type WeaponStats = {
+    damage: number;
+    attackCooldown: number;   // in seconds
+    attackRange: number;      // in meters
+    weaponType: 'melee' | 'ranged';
+}
+
+
+
 export class EventsService {
 
     static readonly PlayerEvents = {
@@ -92,6 +152,14 @@ export class EventsService {
         // Broadcast whenever a player's quest progress changes; used for NPC dialog gating
         QuestProgressUpdated: new hz.LocalEvent<QuestProgressUpdatedPayload>(),
         // (Legacy quest stage request/response removed; dialog should derive from objective state through QuestManager APIs.)
+    }
+
+    static readonly CombatEvents = {
+        AttackStart: new hz.NetworkEvent<AttackStartPayload>('combat.attack_start'),
+        AttackEnd: new hz.NetworkEvent<AttackEndPayload>('combat.attack_end'),
+        Hit: new hz.NetworkEvent<HitPayload>('combat.hit'),
+        ApplyDamage: new hz.NetworkEvent<ApplyDamagePayload>('combat.apply_damage'),
+        Died: new hz.NetworkEvent<DiedPayload>('combat.died'),
     }
 
 

@@ -47,22 +47,6 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
       return;
     }
 
-    // const attachedItem = hz.PlayerControls.connectLocalInput(
-    //   hz.PlayerInputAction.RightPrimary,
-    //   hz.ButtonIcon.Swap,
-    //   this
-    // );
-
-    // attachedItem.registerCallback((action, pressed) => {
-    //   console.log(
-    //     `[PlayerManager] RightPrimary action: ${action}, pressed: ${pressed}`
-    //   );
-    //   // if (pressed) {
-    //   //   this.heldItem?.as(hz.GrabbableEntity).forceRelease();
-    //   //   // Attached object to the player
-    //   //   this.heldItem?.as(hz.AttachableEntity).attachToPlayer(this.owner!, hz.AttachablePlayerAnchor.Torso);
-    //   // }
-    // });
   }
 
 
