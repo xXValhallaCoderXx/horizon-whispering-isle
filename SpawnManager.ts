@@ -25,8 +25,18 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
   private timer: number = 0;
   private spawnConfig: ItemConfig | undefined = undefined;
 
-  // Mapping from entity id -> controller
-  private entityToController: Map<number, ItemSpawnController> = new Map();
+  // Mapping from entity id (string) -> controller. We normalize to string to handle bigint/number differences.
+  private entityToController: Map<string, ItemSpawnController> = new Map();
+
+  // Helper to normalize any entity id shape into a stable string key
+  private toIdKey(id: unknown): string | null {
+    // Horizon Entity.id is bigint per typings; callers may pass number. Normalize to string.
+    const t = typeof id;
+    if (t === "string") return id as string;
+    if (t === "number") return String(id as number);
+    if (t === "bigint") return (id as bigint).toString();
+    return null;
+  }
 
   preStart() {
     this.spawnPoints = this.findUnderContainer(this.entity, "SpawnLocations");
@@ -34,7 +44,8 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
     // TODO Listen to destroy assets and remove from activeItems and entityToController
     this.connectNetworkBroadcastEvent(
       EventsService.AssetEvents.DestroyAsset,
-      ({ entityId }: { entityId: number }) => this.onDestroyAssetRequest(entityId)
+      // Accept number|string for safety; we normalize internally.
+      ({ entityId }: { entityId: any }) => this.onDestroyAssetRequest(entityId)
     );
 
 
@@ -212,17 +223,27 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
 
 
 
-  private onDestroyAssetRequest(entityId: number) {
-    console.log(`[CollectibleSpawnManager] Destroy request for entityId=${entityId}`);
-    const controller = this.entityToController.get(entityId);
+  private async onDestroyAssetRequest(entityId: any) {
+    const key = this.toIdKey(entityId);
+    console.log(`[CollectibleSpawnManager] Destroy request for entityId=${entityId} (key=${key})`);
+    if (!key) {
+      console.warn(`[CollectibleSpawnManager] Destroy request: unsupported id type: ${typeof entityId}`);
+      return;
+    }
+    const controller = this.entityToController.get(key);
     if (!controller) {
       console.warn(`[CollectibleSpawnManager] Destroy request: unknown entityId=${entityId}`);
       return;
     }
 
+    // Unindex all root entities and their descendants for this controller BEFORE unloading
+    for (const root of controller.getEntities()) {
+      this.unindexEntityTree(root);
+    }
+
     // Unload and clean up this controller
     try {
-      controller.unload();
+      await controller.unload();
     } catch (e) {
       this.world.ui.showPopupForEveryone(`Error unloading entityId=${entityId}`, 2);
       console.error("[CollectibleSpawnManager] Error unloading controller:", e);
@@ -231,11 +252,6 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
     // Remove from active list
     const idx = this.activeItems.indexOf(controller);
     if (idx >= 0) this.activeItems.splice(idx, 1);
-
-    // Unindex all root entities and their descendants for this controller
-    for (const root of controller.getEntities()) {
-      this.unindexEntityTree(root);
-    }
 
     this.world.ui.showPopupForEveryone(`Item destoyed!`, 2);
 
@@ -248,8 +264,9 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
 
   private unindexEntityTree(entity: hz.Entity): void {
     const id = (entity as any)?.id;
-    if (typeof id === "number") {
-      this.entityToController.delete(id);
+    const key = this.toIdKey(id);
+    if (key) {
+      this.entityToController.delete(key);
     }
     const children = entity.children.get() ?? [];
     for (const child of children) this.unindexEntityTree(child);
@@ -257,8 +274,9 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
 
   private indexEntityTree(entity: hz.Entity, controller: ItemSpawnController): void {
     const id = (entity as any)?.id;
-    if (typeof id === "number") {
-      this.entityToController.set(id, controller);
+    const key = this.toIdKey(id);
+    if (key) {
+      this.entityToController.set(key, controller);
     }
     const children = entity.children.get() ?? [];
     for (const child of children) this.indexEntityTree(child, controller);
@@ -289,9 +307,9 @@ class ItemSpawnController {
     return this.spawnedEntities;
   }
 
-  unload(): void {
+  async unload(): Promise<void> {
     if (!this.isSpawned) return;
-    this.controller.unload();
+    await this.controller.unload();
     this.isSpawned = false;
     this.spawnPosition = undefined;
     this.spawnedEntities = [];

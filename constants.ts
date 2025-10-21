@@ -48,7 +48,8 @@ export type QuestSubmitCollectProgress = {
     player: hz.Player;
     itemId: string;
     amount: number;
-    entityId: number;
+    // Use string to safely serialize entity IDs (Entity.id is bigint)
+    entityId: string;
 };
 
 export type PlayerInitialState = {
@@ -78,12 +79,13 @@ export class EventsService {
     }
 
     static readonly AssetEvents = {
-        DestroyAsset: new hz.NetworkEvent<{ entityId: number; player: hz.Player }>("DestroyAsset"),
+        // Carry entityId as string to avoid number/bigint mismatches across the wire
+        DestroyAsset: new hz.NetworkEvent<{ entityId: string; player: hz.Player }>("DestroyAsset"),
     }
 
     static readonly QuestEvents = {
         // Use NetworkEvent so client-side item scripts can notify the server QuestManager
-        SubmitQuestCollectProgress: new hz.NetworkEvent<{ player: hz.Player; itemId: string; amount: number; entityId?: number }>("SubmitQuestCollectProgress"),
+        SubmitQuestCollectProgress: new hz.NetworkEvent<{ player: hz.Player; itemId: string; amount: number; entityId?: string }>("SubmitQuestCollectProgress"),
         CheckPlayerQuestSubmission: new hz.LocalEvent<CheckQuestSubmissionPayload>(),
         QuestStarted: new hz.LocalEvent<QuestPayload>(),
         QuestCompleted: new hz.LocalEvent<QuestPayload>(),

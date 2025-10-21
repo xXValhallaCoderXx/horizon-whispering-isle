@@ -62,7 +62,9 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     console.log(`[QuestManager] ${player.name.get()} coconut progress: ${next}/5`);
 
     console.log(`[QuestManager] - Emitting event: SubmitQuestCollectProgress: `, entityId);
-    this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+    if (entityId != null) {
+      this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+    }
 
     if (next >= 5) {
       this.playerStage.set(player, 'ReturnToNPC');

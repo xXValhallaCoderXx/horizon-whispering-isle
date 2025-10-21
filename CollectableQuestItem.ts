@@ -26,11 +26,13 @@ class CollectableQuestItem extends hz.Component<typeof CollectableQuestItem> {
     const id = (typeof this.props.itemId === 'string' && this.props.itemId.trim().length > 0)
       ? this.props.itemId.trim()
       : 'coconut';
+    const rawId: any = (this.entity as any)?.id;
+    const entityId = typeof rawId === 'bigint' ? rawId.toString() : String(rawId);
     this.sendNetworkBroadcastEvent(EventsService.QuestEvents.SubmitQuestCollectProgress, {
       player,
       itemId: id,
       amount: 1,
-      entityId: (this.entity as any)?.id,
+      entityId,
     });
 
   }
