@@ -214,6 +214,7 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
 
 
   private onDestroyAssetRequest(entityId: number) {
+    console.log(`[CollectibleSpawnManager] Destroy request for entityId=${entityId}`);
     const controller = this.entityToController.get(entityId);
     if (!controller) {
       console.warn(`[CollectibleSpawnManager] Destroy request: unknown entityId=${entityId}`);

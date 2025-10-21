@@ -48,6 +48,7 @@ export type QuestSubmitCollectProgress = {
     player: hz.Player;
     itemId: string;
     amount: number;
+    entityId: number;
 };
 
 export type PlayerInitialState = {
@@ -82,7 +83,7 @@ export class EventsService {
 
     static readonly QuestEvents = {
         // Use NetworkEvent so client-side item scripts can notify the server QuestManager
-        SubmitQuestCollectProgress: new hz.NetworkEvent<{ player: hz.Player; itemId: string; amount: number }>("SubmitQuestCollectProgress"),
+        SubmitQuestCollectProgress: new hz.NetworkEvent<{ player: hz.Player; itemId: string; amount: number; entityId?: number }>("SubmitQuestCollectProgress"),
         CheckPlayerQuestSubmission: new hz.LocalEvent<CheckQuestSubmissionPayload>(),
         QuestStarted: new hz.LocalEvent<QuestPayload>(),
         QuestCompleted: new hz.LocalEvent<QuestPayload>(),

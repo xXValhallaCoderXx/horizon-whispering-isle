@@ -30,6 +30,7 @@ class CollectableQuestItem extends hz.Component<typeof CollectableQuestItem> {
       player,
       itemId: id,
       amount: 1,
+      entityId: (this.entity as any)?.id,
     });
 
   }

@@ -48,7 +48,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   }
 
   private checkQuestCollectionSubmission(payload: QuestSubmitCollectProgress): boolean {
-    const { itemId, player, amount } = payload;
+    const { itemId, player, amount, entityId } = payload;
     console.log(`[QuestManager] - Checking quest collection submission for item: ${itemId} by player: ${player.name.get()} with amount: ${amount}`);
     const stage = this.playerStage.get(player) ?? 'NotStarted';
     console.log(`[QuestManager] - Current stage for player ${player.name.get()} is ${stage}`);
@@ -60,6 +60,10 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     const next = prev + (amount || 0);
     this.coconutCounts.set(player, next);
     console.log(`[QuestManager] ${player.name.get()} coconut progress: ${next}/5`);
+
+    console.log(`[QuestManager] - Emitting event: SubmitQuestCollectProgress: `, entityId);
+    this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+
     if (next >= 5) {
       this.playerStage.set(player, 'ReturnToNPC');
       console.log(`[QuestManager] ${player.name.get()} reached required coconuts. Return to NPC.`);
