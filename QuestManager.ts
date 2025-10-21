@@ -1,6 +1,6 @@
 import * as hz from 'horizon/core';
 import { VARIABLE_GROUPS } from 'constants';
-import { EventsService, QuestSubmitCollectProgress, QuestPayload, QUEST_DEFINITIONS, Quest, QuestObjective, ObjectiveType, QuestStatus } from 'constants';
+import { EventsService, QuestSubmitCollectProgress, QuestPayload, QUEST_DEFINITIONS, Quest, QuestObjective, ObjectiveType, QuestStatus, QuestProgressUpdatedPayload } from 'constants';
 import { PlayerStateService } from 'PlayerStateService';
 
 class QuestManager extends hz.Component<typeof QuestManager> {
@@ -29,6 +29,12 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     this.connectLocalBroadcastEvent(
       EventsService.QuestEvents.QuestStarted,
       (payload: QuestPayload) => this.onQuestStarted(payload)
+    );
+
+    // Handle generic quest submissions (e.g., Talk/Hunt tokens)
+    this.connectLocalBroadcastEvent(
+      EventsService.QuestEvents.CheckPlayerQuestSubmission,
+      (payload) => this.onGenericQuestSubmission(payload)
     );
   }
 
@@ -67,7 +73,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       }
     }
 
-    if (progressed) {
+  if (progressed) {
       // SFX/VFX for the collector prior to destroy
       this.playCollectionSoundForPlayer(player, entityId);
       this.playCollectionVfxForPlayer(player, entityId);
@@ -81,12 +87,16 @@ class QuestManager extends hz.Component<typeof QuestManager> {
         this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
       }
 
+      // Emit progress update for dialog gating
+      this.emitQuestProgressUpdated(player, quest);
+
       // Check if all objectives done -> quest completed
       const allDone = quest.objectives.every((o: QuestObjective) => o.isCompleted);
       if (allDone) {
         quest.status = QuestStatus.Completed;
         console.log(`[QuestManager] Quest completed: ${quest.questId}`);
         this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestCompleted, { player, questId: quest.questId });
+        this.emitQuestProgressUpdated(player, quest);
       } else {
         quest.status = QuestStatus.InProgress;
       }
@@ -160,8 +170,10 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     if (!player || !questId) return;
     const quest = this.ensureActiveQuest(player, questId, true);
     if (!quest) return;
+    quest.status = QuestStatus.InProgress;
     this.playerHasBag.set(player, false);
     await this.spawnStorageBagForPlayer(player);
+    this.emitQuestProgressUpdated(player, quest);
   }
 
   private async spawnStorageBagForPlayer(player: hz.Player) {
@@ -197,6 +209,85 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       this.activeQuestByPlayer.set(player, quest);
     }
     return quest;
+  }
+
+  // Handle local submissions such as Talk/Hunt tokens emitted by NPC or enemies
+  private onGenericQuestSubmission(payload: { player: hz.Player; itemType: string; amount: number }) {
+    const { player, itemType, amount } = payload || ({} as any);
+    if (!player || !itemType) return false as any;
+    const quest = this.ensureActiveQuest(player, 'tutorial_survival');
+    if (!quest) return false as any;
+
+    // Determine objective type from token prefix
+    let type: ObjectiveType | undefined = undefined;
+    if (itemType.startsWith('npc:')) type = ObjectiveType.Talk;
+    else if (itemType === 'chicken' || itemType.startsWith('enemy:') || itemType.startsWith('enemy-')) type = ObjectiveType.Hunt;
+    else type = undefined;
+
+    if (!type) return false as any;
+
+    const matching = quest.objectives.filter(o => !o.isCompleted && o.type === type && o.targetType === itemType);
+    if (matching.length === 0) return false as any;
+
+    let progressed = false;
+    const completedNow: QuestObjective[] = [];
+    for (const obj of matching) {
+      const inc = amount || 0;
+      const before = obj.currentCount;
+      const after = Math.min(obj.targetCount, obj.currentCount + inc);
+      obj.currentCount = after;
+      if (after !== before) progressed = true;
+      if (after >= obj.targetCount && !obj.isCompleted) {
+        obj.isCompleted = true;
+        completedNow.push(obj);
+      }
+    }
+
+    if (!progressed) return false as any;
+
+    if (completedNow.length > 0) {
+      this.notifyObjectiveCompletion(player, quest, completedNow);
+    }
+
+    // Emit progress updated for dialog gating
+    this.emitQuestProgressUpdated(player, quest);
+
+    // Check completion
+    const allDone = quest.objectives.every(o => o.isCompleted);
+    if (allDone) {
+      quest.status = QuestStatus.Completed;
+      this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestCompleted, { player, questId: quest.questId });
+    } else {
+      quest.status = QuestStatus.InProgress;
+    }
+    return true as any;
+  }
+
+  private emitQuestProgressUpdated(player: hz.Player, quest: Quest) {
+    try {
+      const stage = this.computeStageFor(quest);
+      const payload: QuestProgressUpdatedPayload = { player, questId: quest.questId, stage, quest };
+      this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, payload);
+    } catch { }
+  }
+
+  // Map quest state to DialogScript QuestStage for dialog gating
+  private computeStageFor(quest: Quest): string {
+    if (!quest) return 'NotStarted';
+    if (quest.status === QuestStatus.Completed) return 'Complete';
+    // Determine next incomplete objective and map to stage
+    const next = quest.objectives.find(o => !o.isCompleted);
+    if (!next) return 'Complete';
+    switch (next.type) {
+      case ObjectiveType.Collect:
+        return 'Collecting';
+      case ObjectiveType.Talk:
+        return 'ReturnToNPC';
+      case ObjectiveType.Hunt:
+        return 'Hunting';
+      default:
+        return 'NotStarted';
+    }
   }
 
   // Legacy stage helpers removed; dialog should query quest/objective state directly moving forward.

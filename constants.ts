@@ -64,6 +64,13 @@ export type CheckQuestSubmissionPayload = {
     itemType: string;      // 'coconut', 'wood', etc.
     amount: number;
 };
+// Lightweight progress update payload for per-player NPC dialog gating
+export type QuestProgressUpdatedPayload = {
+    player: hz.Player;
+    questId: string;
+    stage: string; // e.g., 'NotStarted' | 'Collecting' | 'ReturnToNPC' | 'Hunting' | 'Complete'
+    quest?: Quest; // optional snapshot of quest state
+};
 export class EventsService {
 
     static readonly PlayerEvents = {
@@ -82,6 +89,8 @@ export class EventsService {
         CheckPlayerQuestSubmission: new hz.LocalEvent<CheckQuestSubmissionPayload>(),
         QuestStarted: new hz.LocalEvent<QuestPayload>(),
         QuestCompleted: new hz.LocalEvent<QuestPayload>(),
+        // Broadcast whenever a player's quest progress changes; used for NPC dialog gating
+        QuestProgressUpdated: new hz.LocalEvent<QuestProgressUpdatedPayload>(),
         // (Legacy quest stage request/response removed; dialog should derive from objective state through QuestManager APIs.)
     }
 

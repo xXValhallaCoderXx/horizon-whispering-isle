@@ -23,12 +23,22 @@ export class NPC extends hz.Component<typeof NPC> {
   };
 
   private scriptData?: DialogScript;
+  private stageByPlayer = new Map<hz.Player, QuestStage>();
 
   start() {
     this.scriptData = this.props.dialogScript?.getComponents<DialogScript>()[0]
     this.connectCodeBlockEvent(this.props.proximityTrigger!, hz.CodeBlockEvents.OnPlayerEnterTrigger, (player: hz.Player) => this.onPlayerEnterTrigger(player))
     this.connectCodeBlockEvent(this.props.proximityTrigger!, hz.CodeBlockEvents.OnPlayerExitTrigger, (player: hz.Player) => { this.onPlayerExitTrigger(player) })
     this.connectNetworkEvent(this.entity, DialogEvents.requestDialog, (payload) => this.onOptionReceived(payload.player, payload.key))
+
+    // Track quest progress per player to gate dialog tree
+    this.connectLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, (p) => {
+      try {
+        if (!p?.player) return;
+        const stage = (p.stage as QuestStage) ?? 'NotStarted';
+        this.stageByPlayer.set(p.player, stage);
+      } catch { }
+    });
 
   }
 
@@ -46,8 +56,9 @@ export class NPC extends hz.Component<typeof NPC> {
 
 
   private onOptionReceived(player: hz.Player, key: number[]) {
-    // With legacy stage removed, default to dialog without stage gating
-    const dialog = this.scriptData?.getDialogFromTree(key)
+    // Determine stage for this player; fallback to NotStarted
+    const stage = this.stageByPlayer.get(player) ?? 'NotStarted';
+    const dialog = this.scriptData?.getDialogFromTreeForStage(stage, key)
 
     // Trigger quest only when player confirms (presses closing option)
     const questOnCloseId = this.scriptData?.getQuestIdOnClose(key);
