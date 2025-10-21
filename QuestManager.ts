@@ -7,6 +7,8 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   static propsDefinition = {
     // Asset to spawn for the player's storage bag
     storageBagAsset: { type: hz.PropTypes.Asset },
+    // Optional: an AudioGizmo entity to play when a quest item is collected
+    collectSound: { type: hz.PropTypes.Entity },
   };
 
   // In-memory per-player quest state (non-persistent for now)
@@ -61,6 +63,9 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     this.coconutCounts.set(player, next);
     console.log(`[QuestManager] ${player.name.get()} coconut progress: ${next}/5`);
 
+    // Play collection sound for this player at the item's position if configured
+    this.playCollectionSoundForPlayer(player, entityId);
+
     console.log(`[QuestManager] - Emitting event: SubmitQuestCollectProgress: `, entityId);
     if (entityId != null) {
       this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
@@ -72,6 +77,21 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       return true;
     }
     return false;
+  }
+
+  private playCollectionSoundForPlayer(player: hz.Player, entityId?: string) {
+    try {
+      const soundEntity = this.props.collectSound as hz.Entity | undefined;
+      const audio = soundEntity?.as(hz.AudioGizmo);
+      if (!audio) return;
+
+      const options: hz.AudioOptions = {
+        fade: 0,
+        players: [player],
+        audibilityMode: hz.AudibilityMode.AudibleTo,
+      };
+      audio.play(options);
+    } catch { }
   }
 
   private completeTutorialForPlayer(player: hz.Player) {
