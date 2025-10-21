@@ -85,6 +85,9 @@ export class EventsService {
         CheckPlayerQuestSubmission: new hz.LocalEvent<CheckQuestSubmissionPayload>(),
         QuestStarted: new hz.LocalEvent<QuestPayload>(),
         QuestCompleted: new hz.LocalEvent<QuestPayload>(),
+        // Dialog can ask the server for the player's current quest stage
+        RequestPlayerStage: new hz.LocalEvent<{ player: hz.Player }>("RequestPlayerStage"),
+        PlayerStageResponse: new hz.LocalEvent<{ player: hz.Player; stage: string }>("PlayerStageResponse"),
     }
 
 

@@ -35,10 +35,38 @@ class CollectibleStorage extends hz.Component<typeof CollectibleStorage> {
   start() { }
 
   private onGrabStart(isRightHand: boolean, player: hz.Player) {
-    this.sendNetworkBroadcastEvent(
-      EventsService.PlayerEvents.StorageInitialized,
-      { player }
-    );
+    // Only the designated owner should be able to holster this storage entity
+    if (this.owner && this.owner !== player) {
+      console.warn(`[CollectibleStorage] ${player.name.get()} tried to grab a bag owned by ${this.owner.name.get()}`);
+      return;
+    }
+
+    // Ensure ownership is set to the grabbing player (idempotent)
+    try { this.entity.owner.set(player); } catch { }
+
+    // Make it only visible to this player and disable physics before attaching
+    try {
+      this.entity.setVisibilityForPlayers([player], hz.PlayerVisibilityMode.VisibleTo);
+      this.entity.visible.set(true);
+      this.entity.simulated.set(false);
+    } catch { }
+
+    // Attach to player torso (holster)
+    const attachable = this.entity.as(hz.AttachableEntity);
+    if (attachable) {
+      try { attachable.attachToPlayer(player, hz.AttachablePlayerAnchor.Torso); } catch { }
+    } else {
+      console.warn('[CollectibleStorage] Entity is not attachable');
+    }
+
+    // Optionally restrict future grabs to this player
+    try { this.entity.as(hz.GrabbableEntity)?.setWhoCanGrab([player]); } catch { }
+
+    // Notify systems: storage initialized/holstered for this player
+    this.sendNetworkBroadcastEvent(EventsService.PlayerEvents.StorageInitialized, { player });
+
+    // Also signal as a quest item "collection" so QuestManager can mark has-bag
+    this.sendNetworkBroadcastEvent(EventsService.PlayerEvents.QuestItemCollected, { entity: this.entity, player, amount: 1 });
   }
 
   private handleQuestCollection(entity: hz.Entity) {
