@@ -78,7 +78,7 @@ export class EventsService {
     }
 
     static readonly AssetEvents = {
-        DestroyAsset: new hz.LocalEvent<{ entity: hz.Entity; player: hz.Player }>("DestroyAsset"),
+        DestroyAsset: new hz.NetworkEvent<{ entityId: number; player: hz.Player }>("DestroyAsset"),
     }
 
     static readonly QuestEvents = {

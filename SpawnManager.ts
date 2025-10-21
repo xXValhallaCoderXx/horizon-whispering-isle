@@ -155,11 +155,10 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
       .spawn(position)
       .then(() => {
         activeList.push(wrapper);
-        // Map all spawned root entities to this controller for fast lookup on collection
+        // Index all spawned root entities and their descendants to this controller
         const spawned = wrapper.getEntities();
         for (const e of spawned) {
-          const id = (e as any).id;
-          if (id !== undefined) this.entityToController.set(id, wrapper);
+          this.indexEntityTree(e, wrapper);
         }
 
         const p = wrapper.spawnPosition!;
@@ -254,6 +253,15 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
     }
     const children = entity.children.get() ?? [];
     for (const child of children) this.unindexEntityTree(child);
+  }
+
+  private indexEntityTree(entity: hz.Entity, controller: ItemSpawnController): void {
+    const id = (entity as any)?.id;
+    if (typeof id === "number") {
+      this.entityToController.set(id, controller);
+    }
+    const children = entity.children.get() ?? [];
+    for (const child of children) this.indexEntityTree(child, controller);
   }
 }
 
