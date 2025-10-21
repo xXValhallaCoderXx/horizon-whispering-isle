@@ -9,6 +9,8 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     storageBagAsset: { type: hz.PropTypes.Asset },
     // Optional: an AudioGizmo entity to play when a quest item is collected
     collectSound: { type: hz.PropTypes.Entity },
+    // Optional: a ParticleGizmo entity to play when a quest item is collected
+    collectVfx: { type: hz.PropTypes.Entity },
   };
 
   // In-memory per-player quest state (non-persistent for now)
@@ -64,7 +66,9 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     console.log(`[QuestManager] ${player.name.get()} coconut progress: ${next}/5`);
 
     // Play collection sound for this player at the item's position if configured
+    // Play collection sound & VFX for this player (before destroy)
     this.playCollectionSoundForPlayer(player, entityId);
+    this.playCollectionVfxForPlayer(player, entityId);
 
     console.log(`[QuestManager] - Emitting event: SubmitQuestCollectProgress: `, entityId);
     if (entityId != null) {
@@ -92,6 +96,31 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       };
       audio.play(options);
     } catch { }
+  }
+
+  private playCollectionVfxForPlayer(player: hz.Player, entityId?: string) {
+    try {
+      const vfxEntity = this.props.collectVfx as hz.Entity | undefined;
+      const particle = vfxEntity?.as(hz.ParticleGizmo);
+      if (!particle) return;
+
+      // Position the particle where the item was collected, if available
+      if (entityId) {
+        try {
+          const idBig = BigInt(entityId);
+          const e = new hz.Entity(idBig);
+          const pos = e.position.get();
+          try { vfxEntity!.position.set(pos); } catch {}
+        } catch {}
+      }
+
+      const options: hz.ParticleFXPlayOptions = {
+        fromStart: true,
+        oneShot: true,
+        players: [player],
+      };
+      particle.play(options);
+    } catch {}
   }
 
   private completeTutorialForPlayer(player: hz.Player) {

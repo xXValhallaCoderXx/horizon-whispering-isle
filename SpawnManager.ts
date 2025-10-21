@@ -245,15 +245,15 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
     try {
       await controller.unload();
     } catch (e) {
-      this.world.ui.showPopupForEveryone(`Error unloading entityId=${entityId}`, 2);
+
       console.error("[CollectibleSpawnManager] Error unloading controller:", e);
     }
 
     // Remove from active list
     const idx = this.activeItems.indexOf(controller);
     if (idx >= 0) this.activeItems.splice(idx, 1);
+    // TODO - ADD A NICE CUSTOM UI HERE ON COLLECT 
 
-    this.world.ui.showPopupForEveryone(`Item destoyed!`, 2);
 
     // Optionally trigger a spawn attempt now (capacity freed); or let the timer tick do it
     const cfg = this.spawnConfig;
