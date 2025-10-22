@@ -1,5 +1,5 @@
-
-import * as hz from 'horizon/core';
+import { BaseWeapon } from 'BaseWeapon';
+import { Entity, Player, Vec3, LocalEvent, NetworkEvent } from 'horizon/core';
 
 export const ITEMS = {
     coconut: {
@@ -40,7 +40,7 @@ export const VARIABLE_GROUPS = {
 
 
 export type QuestSubmitCollectProgress = {
-    player: hz.Player;
+    player: Player;
     itemId: string;
     amount: number;
     // Use string to safely serialize entity IDs (Entity.id is bigint)
@@ -51,33 +51,41 @@ export type PlayerInitialState = {
     isTutorialCompleted: number;
     isStorageInitialized: number;
     wearables: string[];
-    player: hz.Player;
+    player: Player;
 }
 
 export type QuestPayload = {
-    player: hz.Player;
+    player: Player;
     questId: string;
 };
 export type CheckQuestSubmissionPayload = {
-    player: hz.Player;
+    player: Player;
 
     itemType: string;      // 'coconut', 'wood', etc.
     amount: number;
 };
 // Lightweight progress update payload for per-player NPC dialog gating
 export type QuestProgressUpdatedPayload = {
-    player: hz.Player;
+    player: Player;
     questId: string;
     stage: string; // e.g., 'NotStarted' | 'Collecting' | 'ReturnToNPC' | 'Hunting' | 'Complete'
     quest?: Quest; // optional snapshot of quest state
 };
 
 
+export interface IWeaponComp {
+    parentWeapon: BaseWeapon;
+    onGrab(isRightHand: boolean): void;
+    onRelease(): void;
+    onFirePressed(target?: Entity | Player): void;
+    onFireReleased(): void;
+}
+
 /* COMBAT TYPES */
 
 export type AttackStartPayload = {
     weaponId: string;
-    attackerPlayer: hz.Player;
+    attackerPlayer: Player;
     attackId: string;          // unique per swing
     stats: WeaponStats;
     timestamp: number;
@@ -85,24 +93,24 @@ export type AttackStartPayload = {
 
 export type AttackEndPayload = {
     weaponId: string;
-    attackerPlayer: hz.Player;
+    attackerPlayer: Player;
     attackId: string;
     timestamp: number;
 }
 
 export type HitPayload = {
     attackId: string;
-    attackerPlayer: hz.Player;
+    attackerPlayer: Player;
     targetNpcId: string;
     weaponId: string;
-    hitPos: hz.Vec3;
+    hitPos: Vec3;
     timestamp: number;
 }
 
 export type ApplyDamagePayload = {
     targetNpcId: string;
     amount: number;
-    attackerPlayer: hz.Player;
+    attackerPlayer: Player;
     weaponId: string;
     attackId: string;
     timestamp: number;
@@ -111,12 +119,12 @@ export type ApplyDamagePayload = {
 export type DiedPayload = {
     targetNpcId: string;
     enemyType: string;
-    killerPlayer: hz.Player | null;
+    killerPlayer: Player | null;
     timestamp: number;
 }
 
 export type HuntProgressPayload = {
-    player: hz.Player;
+    player: Player;
     enemyType: string;
     increment: number;        // usually 1
     timestamp: number;
@@ -134,32 +142,33 @@ export type WeaponStats = {
 export class EventsService {
 
     static readonly PlayerEvents = {
-        FetchInitialState: new hz.LocalEvent<{ player: hz.Player }>("FetchInitialState"),
-        RecievedInitialState: new hz.LocalEvent<PlayerInitialState>("RecievedInitialState"),
+        FetchInitialState: new LocalEvent<{ player: Player }>("FetchInitialState"),
+        RecievedInitialState: new LocalEvent<PlayerInitialState>("RecievedInitialState"),
     }
 
     static readonly AssetEvents = {
         // Carry entityId as string to avoid number/bigint mismatches across the wire
-        DestroyAsset: new hz.NetworkEvent<{ entityId: string; player: hz.Player }>("DestroyAsset"),
+        DestroyAsset: new NetworkEvent<{ entityId: string; player: Player }>("DestroyAsset"),
     }
 
     static readonly QuestEvents = {
         // Use NetworkEvent so client-side item scripts can notify the server QuestManager
-        SubmitQuestCollectProgress: new hz.NetworkEvent<{ player: hz.Player; itemId: string; amount: number; entityId?: string }>("SubmitQuestCollectProgress"),
-        CheckPlayerQuestSubmission: new hz.LocalEvent<CheckQuestSubmissionPayload>(),
-        QuestStarted: new hz.LocalEvent<QuestPayload>(),
-        QuestCompleted: new hz.LocalEvent<QuestPayload>(),
+        SubmitQuestCollectProgress: new NetworkEvent<{ player: Player; itemId: string; amount: number; entityId?: string }>("SubmitQuestCollectProgress"),
+        CheckPlayerQuestSubmission: new LocalEvent<CheckQuestSubmissionPayload>(),
+        QuestStarted: new LocalEvent<QuestPayload>(),
+        QuestCompleted: new LocalEvent<QuestPayload>(),
         // Broadcast whenever a player's quest progress changes; used for NPC dialog gating
-        QuestProgressUpdated: new hz.LocalEvent<QuestProgressUpdatedPayload>(),
+        QuestProgressUpdated: new LocalEvent<QuestProgressUpdatedPayload>(),
         // (Legacy quest stage request/response removed; dialog should derive from objective state through QuestManager APIs.)
     }
 
     static readonly CombatEvents = {
-        AttackStart: new hz.NetworkEvent<AttackStartPayload>('combat.attack_start'),
-        AttackEnd: new hz.NetworkEvent<AttackEndPayload>('combat.attack_end'),
-        Hit: new hz.NetworkEvent<HitPayload>('combat.hit'),
-        ApplyDamage: new hz.NetworkEvent<ApplyDamagePayload>('combat.apply_damage'),
-        Died: new hz.NetworkEvent<DiedPayload>('combat.died'),
+        AttackStart: new NetworkEvent<AttackStartPayload>('combat.attack_start'),
+        AttackEnd: new NetworkEvent<AttackEndPayload>('combat.attack_end'),
+        Hit: new NetworkEvent<HitPayload>('combat.hit'),
+        // ApplyDamage: new NetworkEvent<ApplyDamagePayload>('combat.apply_damage'),
+        Died: new NetworkEvent<DiedPayload>('combat.died'),
+        ApplyDamage: new NetworkEvent<{ target: Entity, damage: number }>("applyDamage"),
     }
 
 

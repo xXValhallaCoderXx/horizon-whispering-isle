@@ -1,137 +1,143 @@
-import { Component, PropTypes, Player, CodeBlockEvents, Entity, AvatarGripPoseAnimationNames } from 'horizon/core';
-import { WieldableItem } from "./WieldableItem";
-import { EventsService, WeaponStats } from "./constants";
+import { Component, Player, PropTypes, CodeBlockEvents, AttachableEntity, AttachablePlayerAnchor, AvatarGripPoseAnimationNames, EntityInteractionMode } from 'horizon/core';
+import { StartAttackingPlayer, StopAttackingPlayer } from 'EnemyNPC';
 
-export class BaseWeapon extends WieldableItem {
+export class BaseWeapon extends Component<typeof BaseWeapon> {
   static propsDefinition = {
-    ...WieldableItem.propsDefinition,
-    weaponId: { type: PropTypes.String, default: "weapon-1" },
-    damage: { type: PropTypes.Number, default: 10 },
-    attackCooldown: { type: PropTypes.Number, default: 0.6 },
-    attackRange: { type: PropTypes.Number, default: 2.0 },
-    weaponType: { type: PropTypes.String, default: "melee" },
+    isDroppable: { type: PropTypes.Boolean, default: false },
   };
-
-  private lastAttackTime: number = 0;
-  private attackInProgress: boolean = false;
-  private currentAttackId: string | null = null;
-
+  private owner: Player | null = null;
 
   preStart(): void {
-    // Ensure WieldableItem wiring (grab/attach/holster) is set up
-    super.preStart();
+    console.log(`[BaseWeapon] preStart called for ${this.entity.name.get()}`);
+    // When the player grabs this item, they become the owner.
+    this.connectCodeBlockEvent(
+      this.entity,
+      CodeBlockEvents.OnGrabStart,
+      (isRightHand: boolean, player: Player) => this.onGrabStart(isRightHand, player)
+    );
 
-    // Weapon-specific input
+    // When the player releases this item (for any reason), intercept the drop.
+    this.connectCodeBlockEvent(
+      this.entity,
+      CodeBlockEvents.OnGrabEnd,
+      (player: Player) => this.onGrabEnd(player)
+    );
+
+    // After being attached to the player (holstered), finalize its physical state.
+    this.connectCodeBlockEvent(
+      this.entity,
+      CodeBlockEvents.OnAttachStart,
+      (player: Player) => this.onAttached(player)
+    );
+
     this.connectCodeBlockEvent(
       this.entity,
       CodeBlockEvents.OnIndexTriggerDown,
-      (player: Player) => this.onTriggerDown(player)
+      (player: Player) => this.onFirePressed(player)
     );
-
-    // this.connectCodeBlockEvent(
-    //   this.entity,
-    //   CodeBlockEvents.OnEntityCollision,
-    //   (otherEntity: Entity) => this.onEntityCollision(otherEntity)
-    // );
+    this.connectCodeBlockEvent(
+      this.entity,
+      CodeBlockEvents.OnIndexTriggerUp,
+      (player: Player) => this.onFireReleased(player)
+    );
   }
 
   start() {
 
+    this.async.setTimeout(() => {
+      console.log(`[BaseWeapon] Stabilizing properties for ${this.entity.name.get()}`);
+      try { this.entity.visible.set(true); } catch {
+        console.warn(`[BaseWeapon] Failed to set visibility for ${this.entity.name.get()}`);
+      }
+      try { this.entity.collidable.set(true); } catch {
+        console.error(`[BaseWeapon] Failed to set collidable for ${this.entity.name.get()}`);
+      }
+      try { this.entity.interactionMode.set(EntityInteractionMode.Both); } catch {
+        console.warn(`[BaseWeapon] Failed to set interactionMode for ${this.entity.name.get()}`);
+      }
+    }, 200); // 200ms is a safe delay.
   }
 
-  private onTriggerDown(player: Player) {
-    // Only the current owner (set by WieldableItem on grab) can attack
-    const owner = this.entity.owner.get();
-    if (!owner || owner.id !== player.id) return;
-    console.log(`[BaseWeapon] onTriggerDown by player: ${player.name.get()}`);
-    this.tryAttack(player);
+  public getOwner(): Player | null {
+    return this.owner;
+  }
+
+  // ** ADD THIS: Pass input to components **
+  private onFirePressed(player: Player) {
+    console.log(`[BaseWeapon] onFirePressed called for ${this.entity.name.get()} by player ${player.name.get()}`);
+    console.log(`[BaseWeapon] isHeld: ${this.isHeld()}`);
+    if (!this.isHeld()) return;
+    this.entity.owner.get().playAvatarGripPoseAnimationByName(AvatarGripPoseAnimationNames.Fire);
+  }
+
+  // ** ADD THIS: Pass input to components **
+  private onFireReleased(player: Player) {
+    if (!this.isHeld()) return;
+
+  }
+
+  private onGrabStart(isRightHand: boolean, player: Player) {
+    console.log(`[BaseWeapon] onGrabStart called for ${this.entity.name.get()}`);
+    this.owner = player;
+    this.entity.owner.set(player);
+    this.sendNetworkBroadcastEvent(StartAttackingPlayer, { player });
+    try { this.entity.as(AttachableEntity)?.detach(); } catch { }
+    this.entity.simulated.set(true);
+    this.entity.collidable.set(true);
+
   }
 
 
-  // Narrowed view on props to include weapon fields defined in this component
-  private get wp() {
-    return this.props as unknown as {
-      weaponId: string;
-      damage: number;
-      attackCooldown: number;
-      attackRange: number;
-      weaponType: string;
-    };
-  }
 
-  private tryAttack(attackerPlayer: Player) {
-    const now = Date.now();
-    if (now - this.lastAttackTime < this.wp.attackCooldown * 1000) {
-      return;
+  private onGrabEnd(player: Player) {
+    console.log(`[BaseWeapon] onGrabEnd called for ${this.entity.name.get()}`);
+    const targetPlayer = this.owner ?? player;
+
+    if (this.props.isDroppable) {
+      this.owner = null;
+      this.entity.owner.set(this.world.getServerPlayer());
+    } else {
+      this.holsterToTorso(targetPlayer);
     }
 
-    this.lastAttackTime = now;
-    const attackId = `${attackerPlayer.id}-${now}`;
-    this.currentAttackId = attackId;
-    this.attackInProgress = true;
+  }   
 
-    // Trigger local animation
-    this.playAttackAnimation(attackerPlayer);
+  private holsterToTorso(player: Player) {
+    console.log(`[BaseWeapon] Holstering weapon ${this.entity.name.get()} to torso of player ${player.name.get()}`);
+    if (!player) return;
+    this.sendNetworkBroadcastEvent(StopAttackingPlayer, { player });
+    this.entity.collidable.set(false);
+    // Immediately stop physics to prevent the weapon from flying away during attachment.
+    this.entity.simulated.set(false);
 
-    // Broadcast start so NPC hit detectors accept hits for this window
-    const stats: WeaponStats = {
-      damage: this.wp.damage,
-      attackCooldown: this.wp.attackCooldown,
-      attackRange: this.wp.attackRange,
-      weaponType: this.wp.weaponType as "melee" | "ranged",
-    };
+    // Ensure the weapon is properly owned and visible before attaching.
+    this.entity.owner.set(player);
+    this.entity.visible.set(true);
 
-    this.sendNetworkBroadcastEvent(EventsService.CombatEvents.AttackStart, {
-      weaponId: this.wp.weaponId,
-      attackerPlayer,
-      attackId,
-      stats,
-      timestamp: now,
-    });
-
-    // End window after swing animation
-    this.async.setTimeout(() => {
-      this.endAttack(attackerPlayer);
-    }, this.estimatedSwingWindowMs());
+    // Attach to the player's torso. This is our holstering mechanic.
+    // The actual position/rotation will be set by our data-driven holster system later.
+    try {
+      const attachable = this.entity.as(AttachableEntity);
+      if (attachable) {
+        attachable.attachToPlayer(player, AttachablePlayerAnchor.Torso);
+      }
+    } catch (e) {
+      console.warn(`[BaseWeapon] Holster attach failed for ${this.entity.name.get()}`);
+    }
   }
 
+  private onAttached(player: Player) {
+    console.log(`[BaseWeapon] onAttached called for ${this.entity.name.get()}`);
+  // Finalize the holstered state. The weapon is now attached.
 
-  private endAttack(attackerPlayer: Player) {
-    if (!this.attackInProgress || !this.currentAttackId) return;
-    const now = Date.now();
-
-    this.sendNetworkBroadcastEvent(EventsService.CombatEvents.AttackEnd, {
-      weaponId: this.wp.weaponId,
-      attackerPlayer,
-      attackId: this.currentAttackId,
-      timestamp: now,
-    });
-
-    this.attackInProgress = false;
-    this.currentAttackId = null;
+    // Disable physics simulation while holstered to save performance, especially on mobile.
+    this.entity.simulated.set(false);
   }
 
-  private playAttackAnimation(player: Player) {
-    player.playAvatarGripPoseAnimationByName(
-      AvatarGripPoseAnimationNames.Fire
-    );
+  public isHeld(): boolean {
+    console.log(`[BaseWeapon] isHeld check for ${this.entity.name.get()}: ${this.owner !== null}`);
+    return this.owner !== null;
   }
 
-  private estimatedSwingWindowMs(): number {
-    return 350; // Fixed window for Phase 1
-  }
-
-  // Expose for hit detector to check
-  public getAttackState() {
-    return {
-      attackInProgress: this.attackInProgress,
-      currentAttackId: this.currentAttackId,
-      owner: this.entity.owner.get?.() ?? null,
-    };
-  }
-
-  private onEntityCollision(otherEntity: Entity) {
-    console.log(`[BaseWeapon] onEntityCollision with entity: ${otherEntity.name.get()}`);
-  }
 }
 Component.register(BaseWeapon);
