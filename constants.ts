@@ -163,12 +163,20 @@ export class EventsService {
     }
 
     static readonly CombatEvents = {
+        AttackSwingEvent: new NetworkEvent<{
+            player: Player;
+            damage: number;
+            reach?: number;        // meters
+            durationMs?: number;   // swing active window
+        }>('combat.attack_swing'),
         AttackStart: new NetworkEvent<AttackStartPayload>('combat.attack_start'),
         AttackEnd: new NetworkEvent<AttackEndPayload>('combat.attack_end'),
-        Hit: new NetworkEvent<HitPayload>('combat.hit'),
-        // ApplyDamage: new NetworkEvent<ApplyDamagePayload>('combat.apply_damage'),
-        Died: new NetworkEvent<DiedPayload>('combat.died'),
-        ApplyDamage: new NetworkEvent<{ target: Entity, damage: number }>("applyDamage"),
+        // Event to apply damage (sent to the target entity). Attacker is optional.
+        Hit: new LocalEvent<HitPayload>('combat.hit'),
+        // Event to broadcast when health reaches zero
+        Died: new LocalEvent<DiedPayload>('combat.died'),
+        // Broadcast UI update so any HUD can react
+        EnemyHealthUpdate: new NetworkEvent<{ target: Entity, current: number, max: number, player?: Player, showMs?: number }>("combat.enemy_health_update"),
     }
 
 

@@ -19,14 +19,21 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     trigger: { type: hz.PropTypes.Entity },
     maxVisionDistance: { type: hz.PropTypes.Number, default: 7 },
     maxAttackDistance: { type: hz.PropTypes.Number, default: 5 },
+    hitSfx: { type: hz.PropTypes.Entity },
+    deathSfx: { type: hz.PropTypes.Entity },
+    deathVfx: { type: hz.PropTypes.Entity }
   };
+  hitSfx?: hz.AudioGizmo;
+
+  deathSfx?: hz.AudioGizmo;
+  deathVfx?: hz.ParticleGizmo;
   static tauntingAnimationDuration: number = 2.8;
   static attackAnimationDuration: number = 2;
   static hitAnimationDuration: number = 0.5;
   static deathDuration: number = 3;
   static maxHitPoints: number = 4;
 
-  players: hz.Player[] = [];
+  players: Set<hz.Player> = new Set();
   hitPoints: number = EnemyNPC.maxHitPoints;
   targetPlayer: hz.Player | undefined = undefined;
   state: EnemyNPCState = EnemyNPCState.Idle;
@@ -36,6 +43,11 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
 
   startLocation!: hz.Vec3;
 
+  preStart(): void {
+    this.hitSfx = this.props.hitSfx?.as(hz.AudioGizmo);
+    this.deathSfx = this.props.deathSfx?.as(hz.AudioGizmo);
+    this.deathVfx = this.props.deathVfx?.as(hz.ParticleGizmo);
+  }
 
   start() {
     super.start();
@@ -57,15 +69,18 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
         }
       });
 
-      // Release target(s) when players leave the aggro trigger
-      // this.connectCodeBlockEvent(this.props.trigger, hz.CodeBlockEvents.OnPlayerExitTrigger, (leftBy) => {
-      //   const player = leftBy
-      //   console.log("Entity left aggro trigger", player?.name.get());
-      //   if (player && player !== this.world.getServerPlayer()) {
-      //     console.log("Player left aggro");
-      //     this.onStopAttackingPlayer(player);
-      //   }
-      // });
+
+      this.connectCodeBlockEvent(this.props.trigger, hz.CodeBlockEvents.OnEntityEnterTrigger, (enteredBy) => {
+        console.log("Entity entered trigger");
+        if (enteredBy.owner.get() !== this.world.getServerPlayer()) {
+          console.log("Starting to attack player");
+          this.hit();
+        }
+      });
+
+      // Note: We don't use OnPlayerExitTrigger because the trigger is just for initial detection.
+      // The NPC should continue chasing based on maxVisionDistance, which is handled by
+      // the distance-based cleanup in updateTarget().
     }
 
     this.connectNetworkBroadcastEvent(StartAttackingPlayer, ({ player }) => {
@@ -85,6 +100,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   }
 
   hit() {
+    console.log("EnemyNPC hit received");
     const now = Date.now() / 1000.0;
     if (now >= this.lastHitTime + EnemyNPC.hitAnimationDuration) {
       this.hitPoints--;
@@ -99,17 +115,12 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   }
 
   private onStartAttackingPlayer(player: hz.Player) {
-    this.players.push(player);
+    this.players.add(player);
   }
 
   private onStopAttackingPlayer(player: hz.Player) {
-    // Remove from the players list
-    {
-      const index = this.players.indexOf(player, 0);
-      if (index > -1) {
-        this.players.splice(index, 1);
-      }
-    }
+    // Remove from the players set
+    this.players.delete(player);
 
     if (player === this.targetPlayer) {
       this.targetPlayer = undefined;
@@ -117,18 +128,34 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   }
 
   private updateTarget() {
-    if (this.targetPlayer === undefined) {
-      let closestDistanceSq = this.props.maxVisionDistance * this.props.maxVisionDistance;
-      const monsterPosition = this.entity.position.get();
-      this.players.forEach((player) => {
-        const playerPosition = player.position.get();
-        const distanceSq = monsterPosition.distanceSquared(playerPosition);
-        if (distanceSq < closestDistanceSq) {
-          closestDistanceSq = distanceSq;
-          this.targetPlayer = player;
-        }
-      });
-    }
+    const monsterPosition = this.entity.position.get();
+    const maxVisionDistanceSq = this.props.maxVisionDistance * this.props.maxVisionDistance;
+
+    // Remove players that are too far away (cleanup for edge cases like teleporting)
+    const playersToRemove: hz.Player[] = [];
+    this.players.forEach((player) => {
+      const playerPosition = player.position.get();
+      const distanceSq = monsterPosition.distanceSquared(playerPosition);
+      if (distanceSq > maxVisionDistanceSq) {
+        playersToRemove.push(player);
+      }
+    });
+    playersToRemove.forEach(player => this.onStopAttackingPlayer(player));
+
+    // Always find the closest player within range (allows switching targets)
+    let closestDistanceSq = maxVisionDistanceSq;
+    let closestPlayer: hz.Player | undefined = undefined;
+
+    this.players.forEach((player) => {
+      const playerPosition = player.position.get();
+      const distanceSq = monsterPosition.distanceSquared(playerPosition);
+      if (distanceSq < closestDistanceSq) {
+        closestDistanceSq = distanceSq;
+        closestPlayer = player;
+      }
+    });
+
+    this.targetPlayer = closestPlayer;
   }
 
   private updateLookAt() {
@@ -260,3 +287,5 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   }
 }
 hz.Component.register(EnemyNPC);
+
+

@@ -1,5 +1,16 @@
-import { Component, Player, PropTypes, CodeBlockEvents, AttachableEntity, AttachablePlayerAnchor, AvatarGripPoseAnimationNames, EntityInteractionMode } from 'horizon/core';
-import { StartAttackingPlayer, StopAttackingPlayer } from 'EnemyNPC';
+import {
+  Entity,
+  Component,
+  Player,
+  PropTypes,
+  CodeBlockEvents,
+  AttachableEntity,
+  AttachablePlayerAnchor,
+  AvatarGripPoseAnimationNames,
+  EntityInteractionMode,
+} from "horizon/core";
+import { EventsService } from "constants";
+import { StartAttackingPlayer, StopAttackingPlayer } from "EnemyNPC";
 
 export class BaseWeapon extends Component<typeof BaseWeapon> {
   static propsDefinition = {
@@ -8,12 +19,11 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
   private owner: Player | null = null;
 
   preStart(): void {
-    console.log(`[BaseWeapon] preStart called for ${this.entity.name.get()}`);
-    // When the player grabs this item, they become the owner.
     this.connectCodeBlockEvent(
       this.entity,
       CodeBlockEvents.OnGrabStart,
-      (isRightHand: boolean, player: Player) => this.onGrabStart(isRightHand, player)
+      (isRightHand: boolean, player: Player) =>
+        this.onGrabStart(isRightHand, player)
     );
 
     // When the player releases this item (for any reason), intercept the drop.
@@ -40,57 +50,84 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
       CodeBlockEvents.OnIndexTriggerUp,
       (player: Player) => this.onFireReleased(player)
     );
+
+    this.connectCodeBlockEvent(
+      this.entity,
+      CodeBlockEvents.OnEntityEnterTrigger,
+      (entity: Entity) => this.onEntityEnterTrigger(entity)
+    );
   }
 
   start() {
-
-    this.async.setTimeout(() => {
-      console.log(`[BaseWeapon] Stabilizing properties for ${this.entity.name.get()}`);
-      try { this.entity.visible.set(true); } catch {
-        console.warn(`[BaseWeapon] Failed to set visibility for ${this.entity.name.get()}`);
-      }
-      try { this.entity.collidable.set(true); } catch {
-        console.error(`[BaseWeapon] Failed to set collidable for ${this.entity.name.get()}`);
-      }
-      try { this.entity.interactionMode.set(EntityInteractionMode.Both); } catch {
-        console.warn(`[BaseWeapon] Failed to set interactionMode for ${this.entity.name.get()}`);
-      }
-    }, 200); // 200ms is a safe delay.
+    try {
+      this.entity.visible.set(true);
+    } catch {
+      console.warn(
+        `[BaseWeapon] Failed to set visibility for ${this.entity.name.get()}`
+      );
+    }
+    try {
+      this.entity.collidable.set(true);
+    } catch {
+      console.error(
+        `[BaseWeapon] Failed to set collidable for ${this.entity.name.get()}`
+      );
+    }
+    try {
+      this.entity.interactionMode.set(EntityInteractionMode.Both);
+    } catch {
+      console.warn(
+        `[BaseWeapon] Failed to set interactionMode for ${this.entity.name.get()}`
+      );
+    }
   }
 
   public getOwner(): Player | null {
     return this.owner;
   }
 
+  private onEntityEnterTrigger(entity: Entity) {
+    console.log(
+      `[BaseWeapon] onEntityEnterTrigger called for ${entity.name.get()}`
+    );
+  }
+
   // ** ADD THIS: Pass input to components **
   private onFirePressed(player: Player) {
-    console.log(`[BaseWeapon] onFirePressed called for ${this.entity.name.get()} by player ${player.name.get()}`);
-    console.log(`[BaseWeapon] isHeld: ${this.isHeld()}`);
     if (!this.isHeld()) return;
-    this.entity.owner.get().playAvatarGripPoseAnimationByName(AvatarGripPoseAnimationNames.Fire);
+    console.log(
+      `[BaseWeapon] onFirePressed called by player ${player.name.get()}`
+    );
+    this.entity.owner
+      .get()
+      .playAvatarGripPoseAnimationByName(AvatarGripPoseAnimationNames.Fire);
+
+    // Open a short swing window; NPCs will validate proximity/angle/cooldown.
+    this.sendNetworkBroadcastEvent(EventsService.CombatEvents.AttackSwingEvent, {
+      player,
+      damage: 25,
+      reach: 2.0,
+      durationMs: 250,
+    });
   }
 
   // ** ADD THIS: Pass input to components **
   private onFireReleased(player: Player) {
     if (!this.isHeld()) return;
-
   }
 
   private onGrabStart(isRightHand: boolean, player: Player) {
-    console.log(`[BaseWeapon] onGrabStart called for ${this.entity.name.get()}`);
     this.owner = player;
     this.entity.owner.set(player);
     this.sendNetworkBroadcastEvent(StartAttackingPlayer, { player });
-    try { this.entity.as(AttachableEntity)?.detach(); } catch { }
+    try {
+      this.entity.as(AttachableEntity)?.detach();
+    } catch { }
     this.entity.simulated.set(true);
     this.entity.collidable.set(true);
-
   }
 
-
-
   private onGrabEnd(player: Player) {
-    console.log(`[BaseWeapon] onGrabEnd called for ${this.entity.name.get()}`);
     const targetPlayer = this.owner ?? player;
 
     if (this.props.isDroppable) {
@@ -99,11 +136,9 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     } else {
       this.holsterToTorso(targetPlayer);
     }
-
-  }   
+  }
 
   private holsterToTorso(player: Player) {
-    console.log(`[BaseWeapon] Holstering weapon ${this.entity.name.get()} to torso of player ${player.name.get()}`);
     if (!player) return;
     this.sendNetworkBroadcastEvent(StopAttackingPlayer, { player });
     this.entity.collidable.set(false);
@@ -122,22 +157,21 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
         attachable.attachToPlayer(player, AttachablePlayerAnchor.Torso);
       }
     } catch (e) {
-      console.warn(`[BaseWeapon] Holster attach failed for ${this.entity.name.get()}`);
+      console.warn(
+        `[BaseWeapon] Holster attach failed for ${this.entity.name.get()}`
+      );
     }
   }
 
   private onAttached(player: Player) {
-    console.log(`[BaseWeapon] onAttached called for ${this.entity.name.get()}`);
-  // Finalize the holstered state. The weapon is now attached.
+    // Finalize the holstered state. The weapon is now attached.
 
     // Disable physics simulation while holstered to save performance, especially on mobile.
     this.entity.simulated.set(false);
   }
 
   public isHeld(): boolean {
-    console.log(`[BaseWeapon] isHeld check for ${this.entity.name.get()}: ${this.owner !== null}`);
     return this.owner !== null;
   }
-
 }
 Component.register(BaseWeapon);
