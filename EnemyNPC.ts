@@ -207,6 +207,8 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
       this.recieveDamage(amount);
       console.log(`NPC took ${amount} damage. Hit points remaining: ${this.hitPoints}`);
 
+      // Apply knockback
+      this.applyKnockback(attacker, 5);
       if (this.hitPoints <= 0) {
         this.handleDeath();
       } else {
@@ -244,6 +246,52 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     });
 
     this.targetPlayer = closestPlayer;
+  }
+
+
+  private applyKnockback(attacker: hz.Player, force: number) {
+    const attackerPos = attacker.position.get();
+    const enemyPos = this.entity.position.get();
+
+    // Calculate knockback direction (from attacker to enemy)
+    const knockbackDir = new hz.Vec3(
+      enemyPos.x - attackerPos.x,
+      0, // Keep knockback horizontal
+      enemyPos.z - attackerPos.z
+    ).normalize();
+
+    // Calculate knockback destination
+    const knockbackDistance = force;
+    const targetPos = new hz.Vec3(
+      enemyPos.x + knockbackDir.x * knockbackDistance,
+      enemyPos.y,
+      enemyPos.z + knockbackDir.z * knockbackDistance
+    );
+
+    // Smoothly move to knockback position
+    const currentPos = this.entity.position.get();
+    const startTime = Date.now();
+    const duration = 0.5 * 1000;
+
+    const knockbackInterval = this.async.setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Ease out effect for smoother knockback
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+
+      const newPos = new hz.Vec3(
+        currentPos.x + (targetPos.x - currentPos.x) * easeProgress,
+        currentPos.y,
+        currentPos.z + (targetPos.z - currentPos.z) * easeProgress
+      );
+
+      this.entity.position.set(newPos);
+
+      if (progress >= 1) {
+        this.async.clearInterval(knockbackInterval);
+      }
+    }, 16); // ~60fps
   }
 
   private updateLookAt() {
