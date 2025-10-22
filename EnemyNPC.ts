@@ -1,5 +1,9 @@
 import * as hz from "horizon/core";
+import { healthData } from "HealthData";
+import { EventsService } from "constants";
 import { BaseNPC, BaseNPCEmote } from "./BaseNPC";
+import { Animation, Easing } from 'horizon/ui';
+
 
 enum EnemyNPCState {
   Idle,
@@ -17,6 +21,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   static propsDefinition = {
     ...BaseNPC.propsDefinition,
     trigger: { type: hz.PropTypes.Entity },
+    hitbox: { type: hz.PropTypes.Entity },
     maxVisionDistance: { type: hz.PropTypes.Number, default: 7 },
     maxAttackDistance: { type: hz.PropTypes.Number, default: 5 },
     hitSfx: { type: hz.PropTypes.Entity },
@@ -43,6 +48,16 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
 
   startLocation!: hz.Vec3;
 
+  private activeSwings: Set<string> = new Set();
+
+  private lastSwingData: {
+    weapon: hz.Entity;
+    owner: hz.Player;
+    damage: number;
+    reach: number;
+    timestamp: number;
+  } | null = null;
+
   preStart(): void {
     this.hitSfx = this.props.hitSfx?.as(hz.AudioGizmo);
     this.deathSfx = this.props.deathSfx?.as(hz.AudioGizmo);
@@ -55,33 +70,77 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     this.setState(EnemyNPCState.Idle);
     this.startLocation = this.entity.position.get();
     if (this.props.trigger !== undefined && this.props.trigger !== null) {
-
-      console.log("Setting up aggro trigger for EnemyNPC");
       // Acquire target(s) when players enter the aggro trigger
       this.connectCodeBlockEvent(this.props.trigger, hz.CodeBlockEvents.OnPlayerEnterTrigger, (enteredBy) => {
         const player = enteredBy
-        console.log("Entity entered aggro trigger", player?.name.get());
         if (player && player !== this.world.getServerPlayer()) {
-          console.log("Player entered aggro");
+          console.log("Player entered aggro: ", player.name.get());
           this.onStartAttackingPlayer(player);
-          // Ensure we immediately have a target
           this.targetPlayer = this.targetPlayer ?? player;
         }
       });
 
 
-      this.connectCodeBlockEvent(this.props.trigger, hz.CodeBlockEvents.OnEntityEnterTrigger, (enteredBy) => {
-        console.log("Entity entered trigger");
-        if (enteredBy.owner.get() !== this.world.getServerPlayer()) {
-          console.log("Starting to attack player");
-          this.hit();
+      // this.connectCodeBlockEvent(this.props.trigger, hz.CodeBlockEvents.OnEntityEnterTrigger, (enteredBy) => {
+      //   console.log("Entity entered trigger");
+      //   if (enteredBy.owner.get() !== this.world.getServerPlayer()) {
+      //     console.log("Starting to attack player");
+      //     this.hit();
+      //   }
+      // });
+
+
+    }
+
+    if (this.props.hitbox !== undefined && this.props.hitbox !== null) {
+
+
+      this.connectCodeBlockEvent(this.props.hitbox as hz.Entity, hz.CodeBlockEvents.OnEntityEnterTrigger, (enteredBy) => {
+
+        console.log("Enemy NPC Triggered by Owner: ", enteredBy.owner.get());
+        // Check if this is a weapon and if there's an active swing
+        if (this.lastSwingData && this.activeSwings.size > 0) {
+          const timeSinceSwing = Date.now() - this.lastSwingData.timestamp;
+
+          // Validate hit: weapon matches and within swing duration
+          if (enteredBy.id === this.lastSwingData.weapon.id &&
+            timeSinceSwing < 250) { // Use durationMs from event
+
+            console.log(`Valid hit! Dealing ${this.lastSwingData.damage} damage`);
+            this.takeDamage(this.lastSwingData.damage, this.lastSwingData.owner);
+
+            // Clear swing data to prevent multiple hits from same swing
+            this.lastSwingData = null;
+            this.activeSwings.clear();
+          }
         }
       });
 
-      // Note: We don't use OnPlayerExitTrigger because the trigger is just for initial detection.
-      // The NPC should continue chasing based on maxVisionDistance, which is handled by
-      // the distance-based cleanup in updateTarget().
     }
+
+    this.connectNetworkBroadcastEvent(EventsService.CombatEvents.AttackSwingEvent, (payload) => {
+      console.log("EnemyNPC Attack Swing Event Recieved:", payload);
+      console.log("EnemyNPC Attack Swing Event Recieved Weapon Owner:", payload.weapon.owner.get());
+
+
+      const swingId = `${payload.weapon.id}_${Date.now()}`;
+      this.activeSwings.add(swingId);
+
+      // Remove swing after its duration
+      this.async.setTimeout(() => {
+        this.activeSwings.delete(swingId);
+      }, payload.durationMs);
+
+      // Store the last swing data for hit validation
+      this.lastSwingData = {
+        weapon: payload.weapon,
+        owner: payload.owner,
+        damage: payload.damage,
+        reach: payload.reach || 2.0,
+        timestamp: Date.now()
+      };
+
+    });
 
     this.connectNetworkBroadcastEvent(StartAttackingPlayer, ({ player }) => {
       this.onStartAttackingPlayer(player);
@@ -89,6 +148,12 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     this.connectNetworkBroadcastEvent(StopAttackingPlayer, ({ player }) => {
       this.onStopAttackingPlayer(player);
     });
+
+
+    // this.connectNetworkEvent(this.entity, EventsService.CombatEvents.AttackSwingEvent, () => {
+    //   console.log("EnemyNPC received AttackSwingEvent");
+    //   this.hit();
+    // })
   }
 
   update(deltaTime: number) {
@@ -100,14 +165,17 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   }
 
   hit() {
-    console.log("EnemyNPC hit received");
     const now = Date.now() / 1000.0;
     if (now >= this.lastHitTime + EnemyNPC.hitAnimationDuration) {
       this.hitPoints--;
       this.lastHitTime = now;
+      this.hitSfx?.play();
       this.triggerHitAnimation();
+      this.recieveDamage(25);
       if (this.hitPoints <= 0) {
-        this.setState(EnemyNPCState.Dead);
+        this.handleDeath();
+
+
       } else {
         this.setState(EnemyNPCState.Hit);
       }
@@ -124,6 +192,26 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
 
     if (player === this.targetPlayer) {
       this.targetPlayer = undefined;
+    }
+  }
+
+  private takeDamage(amount: number, attacker: hz.Player) {
+    if (this.dead) return;
+
+    const now = Date.now() / 1000.0;
+    if (now >= this.lastHitTime + EnemyNPC.hitAnimationDuration) {
+      this.hitPoints -= Math.ceil(amount / 25); // Convert damage to hit points
+      this.lastHitTime = now;
+      this.hitSfx?.play();
+      this.triggerHitAnimation();
+
+      console.log(`NPC took ${amount} damage. Hit points remaining: ${this.hitPoints}`);
+
+      if (this.hitPoints <= 0) {
+        this.handleDeath();
+      } else {
+        this.setState(EnemyNPCState.Hit);
+      }
     }
   }
 
@@ -257,6 +345,8 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
         this.lookAt = undefined;
         this.entity.position.set(this.startLocation);
         this.hitPoints = EnemyNPC.maxHitPoints;
+        this.lastSwingData = null;
+        this.activeSwings.clear();
         break;
     }
   }
@@ -284,6 +374,40 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
         }
       }
     }
+  }
+
+  private recieveDamage(amount: number) {
+    if (healthData.currentHealth <= 0) return;
+    healthData.currentHealth -= amount;
+    if (healthData.currentHealth < 0) healthData.currentHealth = 0;
+    const healthRatio = healthData.currentHealth / healthData.maxHealth;
+    healthData.healthValueBinding.set(healthRatio);
+    healthData.animationValueBinding.set(
+      Animation.timing(healthRatio, {
+        duration: 500,
+        easing: Easing.inOut(Easing.ease)
+      })
+    );
+  }
+
+  private handleDeath() {
+    // Destroy the Asset
+
+    this.setState(EnemyNPCState.Dead);
+    this.deathSfx?.play();
+    this.deathVfx?.play();
+
+
+    this.sendNetworkBroadcastEvent(EventsService.CombatEvents.NPCDeath, {
+      targetNpcId: this.entity.id.toString(),
+      enemyType: this.entity.name.get(),
+      killerPlayer: null,
+    });
+
+
+    this.async.setTimeout(() => {
+      this.world.deleteAsset(this.entity);
+    }, EnemyNPC.deathDuration * 1000);
   }
 }
 hz.Component.register(EnemyNPC);

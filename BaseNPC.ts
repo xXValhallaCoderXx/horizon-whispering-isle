@@ -1,6 +1,7 @@
 import * as hz from "horizon/core";
 import { NavMeshAgent } from "horizon/navmesh";
 import * as ab from "horizon/unity_asset_bundles";
+import { EventsService } from "constants";
 
 export enum BaseNPCEmote {
   Wave = "EmoteWave",
@@ -49,6 +50,7 @@ export class BaseNPC<T> extends hz.Component<typeof BaseNPC & T> {
 
   set dead(value: boolean) {
     if (value != this.animDead_) {
+
       this.animDead_ = value;
       this.assetRef_?.setAnimationParameterBool("Death", value);
       this.navMeshAgent_?.isImmobile.set(value);

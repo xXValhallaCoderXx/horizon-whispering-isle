@@ -116,12 +116,6 @@ export type ApplyDamagePayload = {
     timestamp: number;
 }
 
-export type DiedPayload = {
-    targetNpcId: string;
-    enemyType: string;
-    killerPlayer: Player | null;
-    timestamp: number;
-}
 
 export type HuntProgressPayload = {
     player: Player;
@@ -135,6 +129,21 @@ export type WeaponStats = {
     attackCooldown: number;   // in seconds
     attackRange: number;      // in meters
     weaponType: 'melee' | 'ranged';
+}
+
+// NEW 
+export type IAttackSwingPayload = {
+    weapon: Entity;
+    owner: Player;
+    damage: number;
+    reach?: number;        // meters
+    durationMs?: number;   // swing active window
+}
+export type INPCDeath = {
+    targetNpcId: string;
+    enemyType: string;
+    killerPlayer: Player | null;
+    timestamp: number;
 }
 
 
@@ -163,18 +172,16 @@ export class EventsService {
     }
 
     static readonly CombatEvents = {
-        AttackSwingEvent: new NetworkEvent<{
-            player: Player;
-            damage: number;
-            reach?: number;        // meters
-            durationMs?: number;   // swing active window
-        }>('combat.attack_swing'),
+        AttackSwingEvent: new NetworkEvent<IAttackSwingPayload>('combat.attack_swing'),
+        NPCDeath: new LocalEvent<INPCDeath>('combat.died'),
+
+        // DONT KNOW
         AttackStart: new NetworkEvent<AttackStartPayload>('combat.attack_start'),
         AttackEnd: new NetworkEvent<AttackEndPayload>('combat.attack_end'),
         // Event to apply damage (sent to the target entity). Attacker is optional.
         Hit: new LocalEvent<HitPayload>('combat.hit'),
         // Event to broadcast when health reaches zero
-        Died: new LocalEvent<DiedPayload>('combat.died'),
+
         // Broadcast UI update so any HUD can react
         EnemyHealthUpdate: new NetworkEvent<{ target: Entity, current: number, max: number, player?: Player, showMs?: number }>("combat.enemy_health_update"),
     }

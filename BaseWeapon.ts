@@ -8,9 +8,12 @@ import {
   AttachablePlayerAnchor,
   AvatarGripPoseAnimationNames,
   EntityInteractionMode,
+  LocalEvent,
 } from "horizon/core";
 import { EventsService } from "constants";
 import { StartAttackingPlayer, StopAttackingPlayer } from "EnemyNPC";
+export const DamageEvent = new LocalEvent<{ amount: number }>();
+
 
 export class BaseWeapon extends Component<typeof BaseWeapon> {
   static propsDefinition = {
@@ -51,11 +54,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
       (player: Player) => this.onFireReleased(player)
     );
 
-    this.connectCodeBlockEvent(
-      this.entity,
-      CodeBlockEvents.OnEntityEnterTrigger,
-      (entity: Entity) => this.onEntityEnterTrigger(entity)
-    );
+
   }
 
   start() {
@@ -86,11 +85,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     return this.owner;
   }
 
-  private onEntityEnterTrigger(entity: Entity) {
-    console.log(
-      `[BaseWeapon] onEntityEnterTrigger called for ${entity.name.get()}`
-    );
-  }
+
 
   // ** ADD THIS: Pass input to components **
   private onFirePressed(player: Player) {
@@ -102,13 +97,15 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
       .get()
       .playAvatarGripPoseAnimationByName(AvatarGripPoseAnimationNames.Fire);
 
-    // Open a short swing window; NPCs will validate proximity/angle/cooldown.
+
+
     this.sendNetworkBroadcastEvent(EventsService.CombatEvents.AttackSwingEvent, {
-      player,
+      owner: player,
+      weapon: this.entity,
       damage: 25,
       reach: 2.0,
       durationMs: 250,
-    });
+    }); 
   }
 
   // ** ADD THIS: Pass input to components **
@@ -119,7 +116,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
   private onGrabStart(isRightHand: boolean, player: Player) {
     this.owner = player;
     this.entity.owner.set(player);
-    this.sendNetworkBroadcastEvent(StartAttackingPlayer, { player });
+
     try {
       this.entity.as(AttachableEntity)?.detach();
     } catch { }

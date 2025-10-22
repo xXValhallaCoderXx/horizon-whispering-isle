@@ -1,5 +1,6 @@
 import { Binding, AnimatedBinding } from 'horizon/ui';
 
+
 export const healthData = {
     isVisible: new Binding(true),
     animationValueBinding: new AnimatedBinding(1),
