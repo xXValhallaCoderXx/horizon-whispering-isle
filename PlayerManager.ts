@@ -5,7 +5,9 @@ import {
 } from "constants";
 
 class PlayerManager extends hz.Component<typeof PlayerManager> {
-  static propsDefinition = {};
+  static propsDefinition = {
+    currentHealth: { type: hz.PropTypes.Number, default: 100 },
+  };
   owner: hz.Player | null = null;
   serverPlayer?: hz.Player | null = null;
   state: Omit<PlayerInitialState, "player"> | null = null;
