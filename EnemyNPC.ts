@@ -204,7 +204,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
       this.lastHitTime = now;
       this.hitSfx?.play();
       this.triggerHitAnimation();
-
+      this.recieveDamage(amount);
       console.log(`NPC took ${amount} damage. Hit points remaining: ${this.hitPoints}`);
 
       if (this.hitPoints <= 0) {
