@@ -2,9 +2,11 @@ import * as hz from 'horizon/core';
 import { VARIABLE_GROUPS } from 'constants';
 import { EventsService, QuestSubmitCollectProgress, QuestPayload, QUEST_DEFINITIONS, Quest, QuestObjective, ObjectiveType, QuestStatus, QuestProgressUpdatedPayload } from 'constants';
 import { PlayerStateService } from 'PlayerStateService';
+import { QuestHUD } from 'QuestHUD';
 
 class QuestManager extends hz.Component<typeof QuestManager> {
   static propsDefinition = {
+    questHud: { type: hz.PropTypes.Entity },
     // Asset to spawn for the player's storage bag
     storageBagAsset: { type: hz.PropTypes.Asset },
     // Optional: an AudioGizmo entity to play when a quest item is collected
@@ -18,6 +20,8 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   private activeQuestByPlayer = new Map<hz.Player, Quest>();
   private playerHasBag = new Map<hz.Player, boolean>();
   private spawnedBagByPlayer = new Map<hz.Player, hz.Entity>();
+
+  private hud: QuestHUD | null = null;
 
   preStart(): void {
     this.connectNetworkBroadcastEvent(
@@ -39,6 +43,18 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   }
 
   start() {
+    console.log('[QuestManager] started');
+
+
+    this.hud = this.initializeHud();
+    if (!this.hud) {
+      console.error(
+        "[QuestManager] QuestHUD not found"
+      );
+      return;
+    }
+    this.hud?.setQuestTitle("No Active Quest");
+
 
   }
 
@@ -291,8 +307,19 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   }
 
   // Legacy stage helpers removed; dialog should query quest/objective state directly moving forward.
+  private initializeHud(): QuestHUD | null {
+    const gizmo = this.props.questHud as hz.Entity;
+    console.log('[QuestManager] Initializing Quest HUD:', gizmo);
+    if (!gizmo) return null;
 
+    console.log('[QuestManager] GET COMPONENTS:', gizmo.getComponents(QuestHUD));
+    const comp = gizmo.getComponents(QuestHUD)[0] as
+      | QuestHUD
+      | undefined;
 
+    console.log('[QuestManager] Quest HUD component:', comp);
+    return comp ?? null;
+  }
 
 }
 hz.Component.register(QuestManager);
