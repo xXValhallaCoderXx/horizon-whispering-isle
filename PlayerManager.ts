@@ -3,14 +3,16 @@ import {
   EventsService,
   PlayerInitialState,
 } from "constants";
+import { PlayerStateService } from "PlayerStateService";
+import { PlayerHealthHUD } from "PlayerHealthHUD";
 
 class PlayerManager extends hz.Component<typeof PlayerManager> {
   static propsDefinition = {
-    currentHealth: { type: hz.PropTypes.Number, default: 100 },
+    playerHPGizmo: { type: hz.PropTypes.Entity },
   };
-  owner: hz.Player | null = null;
-  serverPlayer?: hz.Player | null = null;
   state: Omit<PlayerInitialState, "player"> | null = null;
+
+  private hud: PlayerHealthHUD | null = null;
 
   preStart(): void {
 
@@ -19,10 +21,10 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
       this.entity,
       hz.CodeBlockEvents.OnPlayerEnterWorld,
       (player: hz.Player) => {
-        this.entity.owner.set(player);
+
         this.fetchInitialState(player);
         console.log(
-          `[PlayerManager] Player ${player.name.get()} has entered the world (client).`
+          `[PlayerManager]: ${player.name.get()} has entered the world.`
         );
       }
     );
@@ -36,22 +38,23 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
   }
 
   start() {
-    this.owner = this.entity.owner.get();
-    console.log(
-      `[PlayerManager] Owner of this entity is ${this.owner?.name.get()}`
-    );
-    this.serverPlayer = this.world.getServerPlayer();
 
-    if (this.owner === this.serverPlayer) {
-      console.warn(
-        `[PlayerManager] This is the server player: ${this.serverPlayer?.name.get()}`
+    // MODIFIED: Initialize HUD from this.entity
+    this.hud = this.initializeHud();
+    if (!this?.hud) {
+      // This error will still fire if you forget to add the PlayerHealthHUD script
+      // to the same entity as the PlayerManager script.
+      console.error(
+        `[PlayerManager] Failed to initialize HUD for player. Ensure PlayerHealthHUD script is on the same entity.`
       );
       return;
     }
 
+    this.hud?.setPlayerName("Unknown");
+    this.hud?.updateHealth(100, 100);
+    this.hud?.show();
+
   }
-
-
 
   private fetchInitialState(player: hz.Player) {
     if (!player) {
@@ -59,6 +62,14 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
         "[PlayerManager] No current player to fetch initial state."
       );
       return;
+    }
+
+    if (PlayerStateService.instance) {
+      const playerState = PlayerStateService.instance.getPlayerState(
+        player,
+      );
+
+      console.log("[PlayerManager] Fetched initial state:", playerState);
     }
 
     this.sendNetworkBroadcastEvent(
@@ -79,6 +90,23 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
       isStorageInitialized: payload.isStorageInitialized,
       wearables: payload.wearables,
     };
+  }
+
+  private initializeHud(): PlayerHealthHUD | null {
+    // 1. Get the reference to the CustomUI Gizmo entity via props
+    const hpGizmoEntity = this.props.playerHPGizmo;
+
+    if (!hpGizmoEntity) {
+      console.error("Player HP Gizmo reference is missing.");
+      return null;
+    }
+
+    // 2. Query the *referenced entity* for the desired component
+    // Note: We cast the result to ensure TypeScript typing works correctly later.
+    const components = hpGizmoEntity.getComponents(PlayerHealthHUD);
+
+    // 3. Return the component instance
+    return (components.length > 0) ? components[0] : null;
   }
 }
 hz.Component.register(PlayerManager);

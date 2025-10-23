@@ -21,6 +21,13 @@ export class PlayerStateService extends hz.Component<typeof PlayerStateService> 
     return state;
   }
 
+  public listenForStateLoad(callback: (payload: { player: hz.Player; state: PlayerState }) => void) {
+    this.connectLocalBroadcastEvent(
+      EventsService.PlayerEvents.OnPlayerStateLoaded,
+      callback,
+    );
+  }
+
   // --- PRIVATE: Get or initialize state ---
   private getOrCreateState(player: hz.Player): PlayerState {
     const state = this.getPlayerState(player) ?? this.cloneInitial();

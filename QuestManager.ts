@@ -64,16 +64,6 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     console.log('[QuestManager] started');
 
 
-    this.hud = this.initializeHud();
-    if (!this.hud) {
-      console.error(
-        "[QuestManager] QuestHUD not found"
-      );
-      return;
-    }
-    this.hud?.hide();
-
-
   }
 
 
@@ -416,20 +406,6 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     }
   }
 
-  // Legacy stage helpers removed; dialog should query quest/objective state directly moving forward.
-  private initializeHud(): QuestHUD | null {
-    const gizmo = this.props.questHud as hz.Entity;
-    console.log('[QuestManager] Initializing Quest HUD:', gizmo);
-    if (!gizmo) return null;
-
-    console.log('[QuestManager] GET COMPONENTS:', gizmo.getComponents(QuestHUD));
-    const comp = gizmo.getComponents(QuestHUD)[0] as
-      | QuestHUD
-      | undefined;
-
-    console.log('[QuestManager] Quest HUD component:', comp);
-    return comp ?? null;
-  }
 
 }
 hz.Component.register(QuestManager);

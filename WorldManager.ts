@@ -1,6 +1,5 @@
-import { AudioGizmo, Component, PropTypes, Player, CodeBlockEvents, AudioOptions, Entity, AttachableEntity, AttachablePlayerAnchor, AudibilityMode, PlayerVisibilityMode, Asset, GrabbableEntity } from 'horizon/core';
-import { EventsService } from 'constants';
-import { VARIABLE_GROUPS } from 'constants';
+import { PlayerState } from 'constants';
+import { AudioGizmo, Component, PropTypes, SpawnPointGizmo, Player, CodeBlockEvents, AudioOptions, Entity, AudibilityMode, PlayerVisibilityMode, Asset, GrabbableEntity } from 'horizon/core';
 import { PlayerStateService } from 'PlayerStateService';
 
 class WorldManager extends Component<typeof WorldManager> {
@@ -10,6 +9,8 @@ class WorldManager extends Component<typeof WorldManager> {
     backgroundMusic: { type: PropTypes.Entity },
     playerStorageAsset: { type: PropTypes.Asset },
     playerServiceAsset: { type: PropTypes.Entity },
+    tutorialIslandSpawnPoint: { type: PropTypes.Entity },
+    mainIslandSpawnPoint: { type: PropTypes.Entity },
   };
 
   private currentActivePlayers: Set<Player> = new Set();
@@ -17,23 +18,11 @@ class WorldManager extends Component<typeof WorldManager> {
   preStart(): void {
     this.connectCodeBlockEvent(this.entity, CodeBlockEvents.OnPlayerEnterWorld, this.playerEnterWorld)
     this.connectCodeBlockEvent(this.entity, CodeBlockEvents.OnPlayerExitWorld, this.playerExitWorld)
-
   }
 
-  start() {
-
-  }
+  start() { }
 
   private playerEnterWorld = (player: Player) => {
-    this.initializePlayer(player);
-  }
-
-  private initializePlayer(player: Player) {
-    const playerService = this.playerService();
-    if (!playerService) {
-      console.error('[WorldManager] PlayerStateService not found!');
-      return;
-    }
 
     // Play welcome sound
     const soundGizmo = this.props.welcomeSound?.as(AudioGizmo);
@@ -44,20 +33,26 @@ class WorldManager extends Component<typeof WorldManager> {
     };
     soundGizmo && soundGizmo.play(options);
 
+
+    const playerState = this.initializePlayer(player);
+    this.currentActivePlayers.add(player);
+    if (playerState?.tutorial?.completed) {
+      this.teleportPlayer(player, this.props.mainIslandSpawnPoint);
+    } else {
+      this.teleportPlayer(player, this.props.tutorialIslandSpawnPoint);
+    }
+  }
+
+  private initializePlayer(player: Player): PlayerState | void | null {
+    const playerService = this.playerService();
+    if (!playerService) {
+      console.error('[WorldManager] PlayerStateService not found!');
+      return;
+    }
     // Load state and broadcast to all listeners (including QuestManager)
     const state = playerService.loadAndBroadcastState(player);
     console.log(`[WorldManager] Player ${player.name.get()} state loaded. Active quest: ${state.quests.active || 'none'}`);
-
-
-    // const playerState = playerService.getPlayerState(player);
-    // if (playerState === null) {
-    //   console.log(`[WorldManager] Player ${player.name.get()} is entering the world for the first time.`);
-    //   this.handleGeneratingPlayerStorageItem(player);
-    // } else {
-    //   console.log(`[WorldManager] Player ${player.name.get()} is re-entering the world with state: `, playerState);
-    // }
-
-
+    return state;
   }
 
   private playerExitWorld = (player: Player) => {
@@ -93,6 +88,21 @@ class WorldManager extends Component<typeof WorldManager> {
       | PlayerStateService
       | undefined;
     return comp ?? null;
+  }
+
+  private teleportPlayer(player: Player, spawnPoint: Entity | null | undefined) {
+    if (!spawnPoint) {
+      console.error(`[PlayerSpawnManager] Spawn point is not set.`);
+      return;
+    }
+
+    const gizmo = spawnPoint.as(SpawnPointGizmo);
+    if (gizmo) {
+      console.log(`[PlayerSpawnManager] Teleporting ${player.name.get()}.`);
+      gizmo.teleportPlayer(player);
+    } else {
+      console.error(`[PlayerSpawnManager] entity is not a SpawnPointGizmo.`);
+    }
   }
 
 }

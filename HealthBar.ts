@@ -1,7 +1,7 @@
 import { healthData } from "HealthData";
 import { UIComponent, View, Text, UINode } from "horizon/ui";
 
-class HealthBar extends UIComponent<typeof HealthBar> {
+export class HealthBar extends UIComponent<typeof HealthBar> {
   initializeUI() {
     return UINode.if(
       healthData.isVisible,
