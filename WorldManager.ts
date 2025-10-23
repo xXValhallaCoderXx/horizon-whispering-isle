@@ -6,6 +6,8 @@ import { PlayerStateService } from 'PlayerStateService';
 class WorldManager extends Component<typeof WorldManager> {
   static propsDefinition = {
     welcomeSound: { type: PropTypes.Entity },
+    seawaveSound: { type: PropTypes.Entity },
+    backgroundMusic: { type: PropTypes.Entity },
     playerStorageAsset: { type: PropTypes.Asset },
     playerServiceAsset: { type: PropTypes.Entity },
   };
@@ -16,16 +18,6 @@ class WorldManager extends Component<typeof WorldManager> {
     this.connectCodeBlockEvent(this.entity, CodeBlockEvents.OnPlayerEnterWorld, this.playerEnterWorld)
     this.connectCodeBlockEvent(this.entity, CodeBlockEvents.OnPlayerExitWorld, this.playerExitWorld)
 
-
-    // this.connectNetworkBroadcastEvent(
-    //   EventsService.PlayerEvents.FetchInitialState,
-    //   (payload: { player: hz.Player }) => {
-    //     console.log(
-    //       `[WorldManager] Received FetchInitialState for player ${payload.player.name.get()}`
-    //     );
-    //     this.fetchPlayerInitialState(payload.player);
-    //   }
-    // );
   }
 
   start() {
@@ -33,24 +25,31 @@ class WorldManager extends Component<typeof WorldManager> {
   }
 
   private playerEnterWorld = (player: Player) => {
-    // this.initializePlayerInitialState(player);
     this.initializePlayer(player);
   }
 
   private initializePlayer(player: Player) {
     const playerService = this.playerService();
-    if (!playerService) return
+    if (!playerService) {
+      console.error('[WorldManager] PlayerStateService not found!');
+      return;
+    }
 
-
+    // Play welcome sound
     const soundGizmo = this.props.welcomeSound?.as(AudioGizmo);
-
     const options: AudioOptions = {
       fade: 0,
       players: [player],
       audibilityMode: AudibilityMode.AudibleTo,
     };
     soundGizmo && soundGizmo.play(options);
-    const playerState = playerService.getPlayerState(player);
+
+    // Load state and broadcast to all listeners (including QuestManager)
+    const state = playerService.loadAndBroadcastState(player);
+    console.log(`[WorldManager] Player ${player.name.get()} state loaded. Active quest: ${state.quests.active || 'none'}`);
+
+
+    // const playerState = playerService.getPlayerState(player);
     // if (playerState === null) {
     //   console.log(`[WorldManager] Player ${player.name.get()} is entering the world for the first time.`);
     //   this.handleGeneratingPlayerStorageItem(player);
@@ -62,7 +61,7 @@ class WorldManager extends Component<typeof WorldManager> {
   }
 
   private playerExitWorld = (player: Player) => {
-    console.log(`Player ${player.name.get()} has exited the world.`);
+    console.log(`[WorldManager] Player ${player.name.get()} has exited the world.`);
     this.currentActivePlayers.delete(player);
   }
 
@@ -83,9 +82,6 @@ class WorldManager extends Component<typeof WorldManager> {
     const grabbable = rootEntity.as(GrabbableEntity);
     grabbable.setWhoCanGrab([player]);
     console.log(`Set grabbable for player ${player.name.get()}`);
-
-
-
   }
 
 

@@ -1,6 +1,58 @@
 import { BaseWeapon } from 'BaseWeapon';
 import { Entity, Player, Vec3, LocalEvent, NetworkEvent } from 'horizon/core';
 
+
+export class EventsService {
+
+    static readonly PlayerEvents = {
+        OnPlayerStateLoaded: new LocalEvent<{ player: Player; state: PlayerState }>('player.on_player_state_loaded'),
+        // OLD
+        FetchInitialState: new LocalEvent<{ player: Player }>("FetchInitialState"),
+        RecievedInitialState: new LocalEvent<PlayerInitialState>("RecievedInitialState"),
+
+    }
+
+    static readonly AssetEvents = {
+        // Carry entityId as string to avoid number/bigint mismatches across the wire
+        DestroyAsset: new NetworkEvent<{ entityId: string; player: Player }>("DestroyAsset"),
+    }
+
+    static readonly QuestEvents = {
+        // Use NetworkEvent so client-side item scripts can notify the server QuestManager
+        SubmitQuestCollectProgress: new NetworkEvent<{ player: Player; itemId: string; amount: number; entityId?: string }>("SubmitQuestCollectProgress"),
+        CheckPlayerQuestSubmission: new LocalEvent<CheckQuestSubmissionPayload>(),
+        QuestStarted: new LocalEvent<QuestPayload>(),
+        QuestCompleted: new LocalEvent<QuestPayload>(),
+        // Broadcast whenever a player's quest progress changes; used for NPC dialog gating
+        QuestProgressUpdated: new LocalEvent<QuestProgressUpdatedPayload>(),
+        // (Legacy quest stage request/response removed; dialog should derive from objective state through QuestManager APIs.)
+    }
+
+    static readonly CombatEvents = {
+        AttackSwingEvent: new NetworkEvent<IAttackSwingPayload>('combat.attack_swing'),
+        NPCDeath: new LocalEvent<INPCDeath>('combat.died'),
+
+        // DONT KNOW
+        AttackStart: new NetworkEvent<AttackStartPayload>('combat.attack_start'),
+        AttackEnd: new NetworkEvent<AttackEndPayload>('combat.attack_end'),
+        // Event to apply damage (sent to the target entity). Attacker is optional.
+        Hit: new LocalEvent<HitPayload>('combat.hit'),
+        // Event to broadcast when health reaches zero
+
+        // Broadcast UI update so any HUD can react
+        EnemyHealthUpdate: new NetworkEvent<{ target: Entity, current: number, max: number, player?: Player, showMs?: number }>("combat.enemy_health_update"),
+    }
+
+
+
+    // Helper for logging events (debugging)
+    static logEvent(eventName: string, payload: any) {
+        console.log(`[EventsService] ${eventName}:`, JSON.stringify(payload, null, 2));
+    }
+}
+
+
+
 export const ITEMS = {
     coconut: {
         type: 'collectible',
@@ -148,51 +200,6 @@ export type INPCDeath = {
 
 
 
-export class EventsService {
-
-    static readonly PlayerEvents = {
-        FetchInitialState: new LocalEvent<{ player: Player }>("FetchInitialState"),
-        RecievedInitialState: new LocalEvent<PlayerInitialState>("RecievedInitialState"),
-    }
-
-    static readonly AssetEvents = {
-        // Carry entityId as string to avoid number/bigint mismatches across the wire
-        DestroyAsset: new NetworkEvent<{ entityId: string; player: Player }>("DestroyAsset"),
-    }
-
-    static readonly QuestEvents = {
-        // Use NetworkEvent so client-side item scripts can notify the server QuestManager
-        SubmitQuestCollectProgress: new NetworkEvent<{ player: Player; itemId: string; amount: number; entityId?: string }>("SubmitQuestCollectProgress"),
-        CheckPlayerQuestSubmission: new LocalEvent<CheckQuestSubmissionPayload>(),
-        QuestStarted: new LocalEvent<QuestPayload>(),
-        QuestCompleted: new LocalEvent<QuestPayload>(),
-        // Broadcast whenever a player's quest progress changes; used for NPC dialog gating
-        QuestProgressUpdated: new LocalEvent<QuestProgressUpdatedPayload>(),
-        // (Legacy quest stage request/response removed; dialog should derive from objective state through QuestManager APIs.)
-    }
-
-    static readonly CombatEvents = {
-        AttackSwingEvent: new NetworkEvent<IAttackSwingPayload>('combat.attack_swing'),
-        NPCDeath: new LocalEvent<INPCDeath>('combat.died'),
-
-        // DONT KNOW
-        AttackStart: new NetworkEvent<AttackStartPayload>('combat.attack_start'),
-        AttackEnd: new NetworkEvent<AttackEndPayload>('combat.attack_end'),
-        // Event to apply damage (sent to the target entity). Attacker is optional.
-        Hit: new LocalEvent<HitPayload>('combat.hit'),
-        // Event to broadcast when health reaches zero
-
-        // Broadcast UI update so any HUD can react
-        EnemyHealthUpdate: new NetworkEvent<{ target: Entity, current: number, max: number, player?: Player, showMs?: number }>("combat.enemy_health_update"),
-    }
-
-
-
-    // Helper for logging events (debugging)
-    static logEvent(eventName: string, payload: any) {
-        console.log(`[EventsService] ${eventName}:`, JSON.stringify(payload, null, 2));
-    }
-}
 
 // ---- Quest Types ----
 export enum ObjectiveType {
