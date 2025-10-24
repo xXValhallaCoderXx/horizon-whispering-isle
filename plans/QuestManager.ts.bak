@@ -16,8 +16,30 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     collectVfx: { type: hz.PropTypes.Entity },
   };
 
+  // In-memory per-player quest state (non-persistent for now)
+  // Active quest state per player (deep-cloned from definitions)
+  private activeQuestByPlayer = new Map<hz.Player, Quest>();
+  private playerHasBag = new Map<hz.Player, boolean>();
+  private spawnedBagByPlayer = new Map<hz.Player, hz.Entity>();
+
+  private hud: QuestHUD | null = null;
 
   preStart(): void {
+    // --- Listen for player join/exit lifecycle ---
+    this.connectLocalBroadcastEvent(
+      EventsService.PlayerEvents.OnPlayerStateLoaded,
+      (payload: { player: hz.Player }) => {
+        this.onPlayerStateLoaded(payload.player);
+      }
+    );
+
+    this.connectCodeBlockEvent(
+      this.entity,
+      hz.CodeBlockEvents.OnPlayerExitWorld,
+      (player: hz.Player) => {
+        this.onPlayerExit(player);
+      }
+    );
 
     // --- Quest submission handlers ---
     this.connectNetworkBroadcastEvent(
@@ -38,7 +60,67 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     );
   }
 
-  start() { }
+  start() {
+    console.log('[QuestManager] started');
+
+
+  }
+
+
+  // --- NEW: Hydrate quest state from persistence on join ---
+  private onPlayerStateLoaded(player: hz.Player, state: PlayerState) {
+    console.log(`[QuestManager] Hydrating quest state for ${player.name.get()}. Active: ${state}`);
+
+    // If player has an active quest, rebuild runtime state from persisted log
+    const activeQuestId = state?.quests?.active;
+    if (activeQuestId && state.quests.log[activeQuestId]) {
+      const def = QUEST_DEFINITIONS[activeQuestId];
+      if (def) {
+        const quest = deepCloneQuest(def);
+        const log = state.quests.log[activeQuestId];
+
+        // Restore objective progress from log
+        quest.status = log.status as QuestStatus;
+        const currentStepIndex = log.currentStepIndex ?? 0;
+
+        for (const obj of quest.objectives) {
+          const step = log.steps[obj.objectiveId];
+          if (step) {
+            obj.currentCount = step.have;
+            obj.isCompleted = step.done;
+          }
+        }
+
+        this.activeQuestByPlayer.set(player, quest);
+        const completedCount = quest.objectives.filter(o => o.isCompleted).length;
+        const currentObjective = quest.objectives[currentStepIndex];
+
+        console.log(
+          `[QuestManager] Restored quest '${activeQuestId}' for ${player.name.get()}\n` +
+          `  Progress: ${completedCount}/${quest.objectives.length} objectives completed\n` +
+          `  Current Step: ${currentStepIndex} (${currentObjective?.description ?? 'Unknown'})\n` +
+          `  Started: ${new Date(log.startedAt ?? 0).toLocaleString()}`
+        );
+        console.warn("SEND EVENT TO UPDATE HUD HERE");
+
+      }
+    }
+
+    // TODO  - PROBABLY HANDLE THIS ELSE WHERE
+    if (state?.inventory?.hasStorageBag) {
+      this.playerHasBag.set(player, true);
+    }
+  }
+
+  private onPlayerExit(player: hz.Player) {
+    console.log(`[QuestManager] Player ${player.name.get()} exited; cleaning up runtime state`);
+    this.activeQuestByPlayer.delete(player);
+    this.playerHasBag.delete(player);
+    this.spawnedBagByPlayer.delete(player);
+    // Hide HUD when player leaves
+    this.hud?.hide();
+  }
+
 
   private checkQuestCollectionSubmission(payload: QuestSubmitCollectProgress): boolean {
     const { itemId, player, amount, entityId } = payload;
@@ -72,18 +154,18 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
       // --- NEW: Persist objective progress ---
       if (PlayerStateService.instance) {
-        // PlayerStateService.instance.updateQuestObjective(
-        //   player,
-        //   quest.questId,
-        //   obj.objectiveId,
-        //   obj.currentCount,
-        //   obj.targetCount,
-        //   obj.isCompleted
-        // );
+        PlayerStateService.instance.updateQuestObjective(
+          player,
+          quest.questId,
+          obj.objectiveId,
+          obj.currentCount,
+          obj.targetCount,
+          obj.isCompleted
+        );
       }
     }
 
-  if (progressed) {
+    if (progressed) {
       // SFX/VFX for the collector prior to destroy
       this.playCollectionSoundForPlayer(player, entityId);
       this.playCollectionVfxForPlayer(player, entityId);
@@ -110,7 +192,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
         // --- NEW: Persist completion ---
         if (PlayerStateService.instance) {
-          // PlayerStateService.instance.completeQuest(player, quest.questId);
+          PlayerStateService.instance.completeQuest(player, quest.questId);
         }
         // this.hud?.hide();
         this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestCompleted, { player, questId: quest.questId });
@@ -125,68 +207,27 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
 
   private async onQuestStarted(payload: QuestPayload) {
-    console.log("BLAH")
-
     const { player, questId } = payload;
-    console.log(`[QuestManager] Quest started event received: questId=${questId}, player=${player?.name.get()}`);
+    if (!player || !questId) return;
+    const quest = this.ensureActiveQuest(player, questId, true);
+    if (!quest) return;
+    quest.status = QuestStatus.InProgress;
+    this.playerHasBag.set(player, false);
 
-    if (!player || !questId) {
-      console.error('[QuestManager] Invalid QuestStarted payload');
-      return;
-    }
-
-    const questDAO = PlayerStateService.instance?.getTutorialDAO(player);
-    if (!questDAO) {
-      console.error('[QuestManager] Could not get quest DAO for player');
-      return;
-    }
-
-    const questLog = questDAO.getQuestLog(questId);
-    if (questLog.status !== 'InProgress') {
-      console.warn(`[QuestManager] Quest ${questId} not in progress for ${player.name.get()}`);
-      return;
+    const startingStepIndex = 0;
+    // --- NEW: Persist active quest ---
+    if (PlayerStateService.instance) {
+      PlayerStateService.instance.setActiveQuest(player, questId, startingStepIndex);
     }
 
     await this.spawnStorageBagForPlayer(player);
-
-
-    const inventoryDAO = PlayerStateService.instance.getInventoryDAO(player);
-    if (inventoryDAO) {
-      inventoryDAO.setIsStorageBagAcquired(true);
-      console.log(`[QuestManager] Storage bag marked as acquired for ${player.name.get()}`);
-    }
-
-
-    console.log(`[QuestManager] TODO: Show quest HUD for player ${player.name.get()}`);
-
-
-    this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, {
-      player,
-      questId: questId,
-      stage: questLog.currentStepIndex.toString() // or map to TUTORIAL_QUEST_STAGES enum
-    });
-    console.log(`[QuestManager] Quest started successfully for ${player.name.get()}`);
-    // const { player, questId } = payload;
-    // if (!player || !questId) return;
-    // const quest = this.ensureActiveQuest(player, questId, true);
-    // if (!quest) return;
-    // quest.status = QuestStatus.InProgress;
-    // // this.playerHasBag.set(player, false);
-
-    // const startingStepIndex = 0;
-    // // --- NEW: Persist active quest ---
-    // if (PlayerStateService.instance) {
-    //   PlayerStateService.instance.setActiveQuest(player, questId, startingStepIndex);
-    // }
-
-    // await this.spawnStorageBagForPlayer(player);
-    // const firstObjective = quest.objectives[startingStepIndex];
-    // console.log(
-    //   `[QuestManager] Quest started: ${questId} for ${player.name.get()}\n` +
-    //   `  Total Steps: ${quest.objectives.length}\n` +
-    //   `  Starting Step: ${startingStepIndex} - ${firstObjective?.description ?? 'Unknown'}`
-    // );
-    // this.emitQuestProgressUpdated(player, quest);
+    const firstObjective = quest.objectives[startingStepIndex];
+    console.log(
+      `[QuestManager] Quest started: ${questId} for ${player.name.get()}\n` +
+      `  Total Steps: ${quest.objectives.length}\n` +
+      `  Starting Step: ${startingStepIndex} - ${firstObjective?.description ?? 'Unknown'}`
+    );
+    this.emitQuestProgressUpdated(player, quest);
     //  this.updateHudForCurrentStep(player, quest, startingStepIndex);
   }
 
@@ -225,14 +266,14 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
       // --- NEW: Persist objective progress ---
       if (PlayerStateService.instance) {
-        // PlayerStateService.instance.updateQuestObjective(
-        //   player,
-        //   quest.questId,
-        //   obj.objectiveId,
-        //   obj.currentCount,
-        //   obj.targetCount,
-        //   obj.isCompleted
-        // );
+        PlayerStateService.instance.updateQuestObjective(
+          player,
+          quest.questId,
+          obj.objectiveId,
+          obj.currentCount,
+          obj.targetCount,
+          obj.isCompleted
+        );
       }
     }
 
@@ -251,7 +292,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       quest.status = QuestStatus.Completed;
       // --- NEW: Persist completion ---
       if (PlayerStateService.instance) {
-        // PlayerStateService.instance.completeQuest(player, quest.questId);
+        PlayerStateService.instance.completeQuest(player, quest.questId);
       }
       this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestCompleted, { player, questId: quest.questId });
     } else {
@@ -287,8 +328,8 @@ class QuestManager extends hz.Component<typeof QuestManager> {
           const idBig = BigInt(entityId);
           const e = new hz.Entity(idBig);
           const pos = e.position.get();
-          try { vfxEntity!.position.set(pos); } catch {}
-        } catch {}
+          try { vfxEntity!.position.set(pos); } catch { }
+        } catch { }
       }
 
       const options: hz.ParticleFXPlayOptions = {
@@ -297,7 +338,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
         players: [player],
       };
       particle.play(options);
-    } catch {}
+    } catch { }
   }
 
   private notifyObjectiveCompletion(player: hz.Player, quest: Quest, completedObjectives: QuestObjective[]) {
@@ -352,7 +393,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       root.visible.set(true);
       // Ownership can help scripts resolve player interactions
       try { root.owner.set(player); } catch { }
-      // this.spawnedBagByPlayer.set(player, root);
+      this.spawnedBagByPlayer.set(player, root);
       console.log(`[QuestManager] Spawned storage bag for ${player.name.get()} at`, spawnPos);
     } catch (e) {
       console.warn('[QuestManager] Failed to spawn storage bag', e);
@@ -361,15 +402,15 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
   // Ensure the player has an active quest instance cloned from the definitions
   private ensureActiveQuest(player: hz.Player, questId: string, createIfMissing: boolean = false): Quest | null {
-    // let quest = this.activeQuestByPlayer.get(player);
-    // if (!quest || quest.questId !== questId) {
-    //   if (!createIfMissing) return null;
-    //   const def = QUEST_DEFINITIONS[questId];
-    //   if (!def) return null;
-    //   quest = deepCloneQuest(def);
-    //   this.activeQuestByPlayer.set(player, quest);
-    // }
-    return null
+    let quest = this.activeQuestByPlayer.get(player);
+    if (!quest || quest.questId !== questId) {
+      if (!createIfMissing) return null;
+      const def = QUEST_DEFINITIONS[questId];
+      if (!def) return null;
+      quest = deepCloneQuest(def);
+      this.activeQuestByPlayer.set(player, quest);
+    }
+    return quest;
   }
 
 

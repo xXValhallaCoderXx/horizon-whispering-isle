@@ -1,116 +1,120 @@
 import * as hz from 'horizon/core';
-import { EventsService } from 'constants';
-import { VARIABLE_GROUPS, PLAYER_INITIAL_STATE, PlayerState } from 'constants';
+import { EventsService, PlayerState, PLAYER_INITIAL_STATE } from 'constants';
+import { TutorialQuestDAO } from 'TutorialQuestDAO';
+import { InventoryDAO } from 'InventoryDAO';
+
+
+
 
 export class PlayerStateService extends hz.Component<typeof PlayerStateService> {
-  static propsDefinition = {
-    playerStorageAsset: { type: hz.PropTypes.Asset },
-  };
+  static propsDefinition = {};
 
-  // Singleton for easy access from QuestManager
   static instance: PlayerStateService;
+
+  private inventoryDaos = new Map<hz.Player, InventoryDAO>();
+  private tutorialDaos = new Map<hz.Player, TutorialQuestDAO>();
+  // private playerDaos = new Map<hz.Player, PlayerDao>();
 
   start() {
     PlayerStateService.instance = this;
+
+    this.connectCodeBlockEvent(this.entity, hz.CodeBlockEvents.OnPlayerEnterWorld, (player) => {
+      this.tutorialDaos.set(player, new TutorialQuestDAO(player, this.world));
+      // this.playerDaos.set(player, new PlayerDao(player, this.world));
+      this.inventoryDaos.set(player, new InventoryDAO(player, this.world));
+      this.sendLocalBroadcastEvent(EventsService.PlayerEvents.OnPlayerStateLoaded, { player });
+    });
+
+    this.connectCodeBlockEvent(this.entity, hz.CodeBlockEvents.OnPlayerExitWorld, (player) => {
+      this.inventoryDaos.delete(player);
+      this.tutorialDaos.delete(player);
+      // this.playerDaos.delete(player);
+    });
   }
 
-  // --- PUBLIC API: Called by WorldManager on join ---
-  public loadAndBroadcastState(player: hz.Player): PlayerState {
-    const state = this.getOrCreateState(player);
-    this.sendLocalBroadcastEvent(EventsService.PlayerEvents.OnPlayerStateLoaded, { player, state });
-    return state;
+  // --- PUBLIC API ---
+  public getTutorialDAO(player: hz.Player): TutorialQuestDAO | undefined {
+    return this.tutorialDaos.get(player);
   }
 
-  public listenForStateLoad(callback: (payload: { player: hz.Player; state: PlayerState }) => void) {
-    this.connectLocalBroadcastEvent(
-      EventsService.PlayerEvents.OnPlayerStateLoaded,
-      callback,
+  // public getPlayerDAO(player: hz.Player): PlayerDao | undefined {
+  //   return this.playerDaos.get(player);
+  // }
+
+  public getInventoryDAO(player: hz.Player): InventoryDAO | undefined {
+    return this.inventoryDaos.get(player);
+  } 
+
+}
+
+
+
+hz.Component.register(PlayerStateService);
+
+
+
+
+const PLAYER_STATE_KEY = "player:state";
+
+
+export class PlayerStateUtils {
+  /**
+   * Get the full player state from persistent storage
+   */
+  static getPlayerState(player: hz.Player, world: hz.World): PlayerState {
+    const stored = world.persistentStorage.getPlayerVariable(
+      player,
+      PLAYER_STATE_KEY
+    ) as string | null;
+
+    if (!stored) {
+      return JSON.parse(JSON.stringify(PLAYER_INITIAL_STATE));
+    }
+
+    try {
+      return JSON.parse(stored) as PlayerState;
+    } catch (e) {
+      console.error('[PlayerStateUtils] Failed to parse player state:', e);
+      return JSON.parse(JSON.stringify(PLAYER_INITIAL_STATE));
+    }
+  }
+
+  /**
+   * Set the full player state to persistent storage
+   */
+  static setPlayerState(player: hz.Player, world: hz.World, state: PlayerState): void {
+    const serialized = JSON.stringify(state);
+    world.persistentStorage.setPlayerVariable(
+      player,
+      PLAYER_STATE_KEY,
+      serialized
     );
   }
 
-  // --- PRIVATE: Get or initialize state ---
-  private getOrCreateState(player: hz.Player): PlayerState {
-    const state = this.getPlayerState(player) ?? this.cloneInitial();
-    // Schema migration: ensure quests fields exist
-    if (!state.quests) {
-      state.quests = { active: "", log: {} };
-    }
-    if (!state.quests.log) {
-      state.quests.log = {};
-    }
-    return state;
+  /**
+   * Update a specific nested property in player state
+   * Usage: updatePlayerState(player, world, (state) => { state.inventory.hasStorageBag = true; })
+   */
+  static updatePlayerState(
+    player: hz.Player,
+    world: hz.World,
+    updater: (state: PlayerState) => void
+  ): void {
+    const state = this.getPlayerState(player, world);
+    updater(state);
+    this.setPlayerState(player, world, state);
   }
 
-  private cloneInitial(): PlayerState {
-    // Shallow clone is fine for our current shape
-    return JSON.parse(JSON.stringify(PLAYER_INITIAL_STATE));
-  }
-
-  private saveState(player: hz.Player, state: PlayerState) {
-    const key = `${VARIABLE_GROUPS.player.group}:${VARIABLE_GROUPS.player.keys.state}`;
-    this.world.persistentStorage.setPlayerVariable(player, key, state as any);
-  }
-
-
-  // --- EXISTING: Read raw state  ---
-  getPlayerState(player: hz.Player): PlayerState | null {
-    const key = `${VARIABLE_GROUPS.player.group}:${VARIABLE_GROUPS.player.keys.state}`;
-    const raw = this.world.persistentStorage.getPlayerVariable(player, key);
-    if (raw == null) return null;
-    // raw could be an object or a JSON string or a legacy number; coerce safely
-    if (typeof raw === 'string') {
-      try { return JSON.parse(raw) as PlayerState; } catch { return null; }
-    }
-    if (typeof raw === 'object') {
-      return raw as unknown as PlayerState;
-    }
-    return null;
-  }
-
-  // --- Quest-specific persistence methods ---
-  // Called when QuestManager assigns a quest to a player
-  public setActiveQuest(player: hz.Player, questId: string) {
-    const state = this.getOrCreateState(player);
-    state.quests.active = questId;
-    // Initialize quest log entry if missing
-    if (!state.quests.log[questId]) {
-      state.quests.log[questId] = {
-        status: 'InProgress',
-        steps: {},
-        completedAt: 0,
-      };
-    }
-    this.saveState(player, state);
-  }
-
-
-  // Called by QuestManager after any objective progress
-  public updateQuestObjective(player: hz.Player, questId: string, objectiveId: string, have: number, need: number, done: boolean) {
-    const state = this.getOrCreateState(player);
-    if (!state.quests.log[questId]) {
-      state.quests.log[questId] = { status: 'InProgress', steps: {}, completedAt: 0 };
-    }
-    state.quests.log[questId].steps[objectiveId] = { have, need, done };
-    this.saveState(player, state);
-  }
-
-  // Called when QuestManager completes a quest
-  public completeQuest(player: hz.Player, questId: string) {
-    const state = this.getOrCreateState(player);
-    if (!state.quests.log[questId]) return;
-    state.quests.log[questId].status = 'Completed';
-    state.quests.log[questId].completedAt = Date.now();
-    // Clear active if this was the active quest
-    if (state.quests.active === questId) {
-      state.quests.active = "";
-    }
-    this.saveState(player, state);
-  }
-
-  setHasStorageBag(player: hz.Player, has: boolean) {
-    const state = this.getOrCreateState(player);
-    state.inventory.hasStorageBag = has;
-    this.saveState(player, state);
+  /**
+   * Get a specific nested value from player state
+   * Usage: getNestedValue(player, world, (state) => state.inventory.hasStorageBag)
+   */
+  static getNestedValue<T>(
+    player: hz.Player,
+    world: hz.World,
+    getter: (state: PlayerState) => T
+  ): T {
+    const state = this.getPlayerState(player, world);
+    return getter(state);
   }
 }
-hz.Component.register(PlayerStateService);

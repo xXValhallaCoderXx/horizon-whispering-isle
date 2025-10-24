@@ -10,31 +10,12 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
   static propsDefinition = {
     playerHPGizmo: { type: hz.PropTypes.Entity },
   };
-  state: Omit<PlayerInitialState, "player"> | null = null;
+
 
   private hud: PlayerHealthHUD | null = null;
 
   preStart(): void {
 
-    // On Player Enter World
-    this.connectCodeBlockEvent(
-      this.entity,
-      hz.CodeBlockEvents.OnPlayerEnterWorld,
-      (player: hz.Player) => {
-
-        this.fetchInitialState(player);
-        console.log(
-          `[PlayerManager]: ${player.name.get()} has entered the world.`
-        );
-      }
-    );
-
-    this.connectNetworkBroadcastEvent(
-      EventsService.PlayerEvents.RecievedInitialState,
-      (payload: PlayerInitialState) => {
-        this.initializePlayerState(payload);
-      }
-    );
   }
 
   start() {
@@ -56,41 +37,8 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
 
   }
 
-  private fetchInitialState(player: hz.Player) {
-    if (!player) {
-      console.error(
-        "[PlayerManager] No current player to fetch initial state."
-      );
-      return;
-    }
 
-    if (PlayerStateService.instance) {
-      const playerState = PlayerStateService.instance.getPlayerState(
-        player,
-      );
 
-      console.log("[PlayerManager] Fetched initial state:", playerState);
-    }
-
-    this.sendNetworkBroadcastEvent(
-      EventsService.PlayerEvents.FetchInitialState,
-      {
-        player: player,
-      }
-    );
-  }
-
-  private initializePlayerState(payload: PlayerInitialState) {
-    console.log(
-      `[PlayerManager] Initializing state for player ${payload.isStorageInitialized}`
-    );
-    // Additional initialization logic can go here
-    this.state = {
-      isTutorialCompleted: payload.isTutorialCompleted,
-      isStorageInitialized: payload.isStorageInitialized,
-      wearables: payload.wearables,
-    };
-  }
 
   private initializeHud(): PlayerHealthHUD | null {
     // 1. Get the reference to the CustomUI Gizmo entity via props

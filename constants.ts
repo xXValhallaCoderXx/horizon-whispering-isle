@@ -1,22 +1,19 @@
 import { BaseWeapon } from 'BaseWeapon';
 import { Entity, Player, Vec3, LocalEvent, NetworkEvent } from 'horizon/core';
+import { QuestLog } from 'TutorialQuestDAO';
 
+export const INVENTORY_STATE_KEY = `player:inventory_state`;
+
+export const PLAYER_STATE_KEY_2 = `player:player_state`;
 
 export class EventsService {
 
     static readonly PlayerEvents = {
-        OnPlayerStateLoaded: new LocalEvent<{ player: Player; state: PlayerState }>('player.on_player_state_loaded'),
-        // OLD
-        FetchInitialState: new LocalEvent<{ player: Player }>("FetchInitialState"),
-        RecievedInitialState: new LocalEvent<PlayerInitialState>("RecievedInitialState"),
-
+        OnPlayerStateLoaded: new LocalEvent<{ player: Player }>('player.on_player_state_loaded'),
     }
-
     static readonly AssetEvents = {
-        // Carry entityId as string to avoid number/bigint mismatches across the wire
         DestroyAsset: new NetworkEvent<{ entityId: string; player: Player }>("DestroyAsset"),
     }
-
     static readonly QuestEvents = {
         // Use NetworkEvent so client-side item scripts can notify the server QuestManager
         SubmitQuestCollectProgress: new NetworkEvent<{ player: Player; itemId: string; amount: number; entityId?: string }>("SubmitQuestCollectProgress"),
@@ -27,6 +24,7 @@ export class EventsService {
         QuestProgressUpdated: new LocalEvent<QuestProgressUpdatedPayload>(),
         // (Legacy quest stage request/response removed; dialog should derive from objective state through QuestManager APIs.)
     }
+
 
     static readonly CombatEvents = {
         AttackSwingEvent: new NetworkEvent<IAttackSwingPayload>('combat.attack_swing'),
@@ -81,9 +79,13 @@ export const VARIABLE_GROUPS = {
     player: {
         group: "player",
         keys: {
-            state: "state",
-            isPlayerStorageInitialized: "isPlayerStorageInitialized",
-            playerWearables: "playerWearables",
+            state: {
+                tutorial_completed: "tutorial_completed",
+                inventory_enabled: "inventory_enabled",
+                spawn_lastIsland: "spawn_lastIsland",
+                quest_active: "quest_active",
+                quest_log_prefix: "quest_log_",
+            }
         }
     }
 }
@@ -234,6 +236,8 @@ export interface Quest {
     reward: number;
 }
 
+
+
 // Baseline quest definitions; clone before use to avoid mutating these.
 export const QUEST_DEFINITIONS: Record<string, Quest> = {
     tutorial_survival: {
@@ -295,15 +299,7 @@ export interface PlayerState {
     };
     quests: {
         active: string;
-        log: Record<string, {
-            status: string;
-            steps: Record<string, {
-                need: number;
-                have: number;
-                done: boolean;
-            }>;
-            completedAt: number;
-        }>;
+        log: Record<string, QuestLog>;
     };
     inventory: {
         hasStorageBag: boolean;

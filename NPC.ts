@@ -1,10 +1,12 @@
 
 import { DialogContainer } from 'Dialog_UI';
-import { DialogScript, QuestStage } from 'DialogScript';
+import { DialogScript } from 'DialogScript';
+import { EventsService } from 'constants';
 import * as hz from 'horizon/core';
 import { AudioGizmo, AudibilityMode, } from 'horizon/core';
-import { EventsService } from './constants';
 import { NpcManager } from './NpcManager';
+import { QuestLog, TUTORIAL_QUEST_STAGES, TUTORIAL_QUEST_KEY } from 'TutorialQuestDAO';
+import { PlayerStateService } from 'PlayerStateService';
 
 export class DialogEvents {
   public static requestDialog = new hz.NetworkEvent<{ player: hz.Player, key: number[] }>('sendDialogTreeKey'); // send the key to the dialog script to get the dialog tree
@@ -18,28 +20,16 @@ export class NPC extends hz.Component<typeof NPC> {
     proximityTrigger: { type: hz.PropTypes.Entity }, // trigger player enters to make this the NPC we are interacting with
     dialogScript: { type: hz.PropTypes.Entity }, // first entity in the list of dialog scripts
     questAcceptedSound: { type: hz.PropTypes.Entity },
-    // Optional: link to an entity that has NpcManager attached (e.g., your UAB entity)
     npcManager: { type: hz.PropTypes.Entity, default: undefined },
   };
 
   private scriptData?: DialogScript;
-  private stageByPlayer = new Map<hz.Player, QuestStage>();
 
   start() {
     this.scriptData = this.props.dialogScript?.getComponents<DialogScript>()[0]
     this.connectCodeBlockEvent(this.props.proximityTrigger!, hz.CodeBlockEvents.OnPlayerEnterTrigger, (player: hz.Player) => this.onPlayerEnterTrigger(player))
     this.connectCodeBlockEvent(this.props.proximityTrigger!, hz.CodeBlockEvents.OnPlayerExitTrigger, (player: hz.Player) => { this.onPlayerExitTrigger(player) })
     this.connectNetworkEvent(this.entity, DialogEvents.requestDialog, (payload) => this.onOptionReceived(payload.player, payload.key))
-
-    // Track quest progress per player to gate dialog tree
-    this.connectLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, (p) => {
-      try {
-        if (!p?.player) return;
-        const stage = (p.stage as QuestStage) ?? 'NotStarted';
-        this.stageByPlayer.set(p.player, stage);
-      } catch { }
-    });
-
   }
 
   private onPlayerEnterTrigger(player: hz.Player) {
@@ -56,50 +46,179 @@ export class NPC extends hz.Component<typeof NPC> {
 
 
   private onOptionReceived(player: hz.Player, key: number[]) {
-    // Determine stage for this player; fallback to NotStarted
-    const stage = this.stageByPlayer.get(player) ?? 'NotStarted';
-    const dialog = this.scriptData?.getDialogFromTreeForStage(stage, key)
 
-    // Trigger quest only when player confirms (presses closing option)
-    const questOnCloseId = this.scriptData?.getQuestIdOnClose(key);
+    if (!PlayerStateService.instance) {
+      console.error(`[NPC] PlayerStateService instance not available.`);
+      return;
+    }
+
+    // 1. Get the player's quest DAO
+    const questDAO = PlayerStateService.instance.getTutorialDAO(player);
+    if (!questDAO) {
+      console.error(`[NPC] Could not get QuestDAO for player ${player.name.get()}`);
+      return;
+    }
+
+    // 2. Get the specific quest log and map its step to a Stage string
+    const questLog = questDAO.getQuestLog(TUTORIAL_QUEST_KEY);
+    const stage = this.getStageStringFromLog(questLog);
+
+    // 3. Get the correct dialog based on the player's persistent state
+    const dialog = this.scriptData?.getDialogFromTreeForStage(stage, key);
+
+    console.log(`[NPC] Dialog for ${player.name.get()} at stage ${stage}:`, dialog ? 'Found' : 'Null (dialog closed)');
+
+    // 4. If dialog is null, it means the player closed the dialog tree
+    //    Handle quest actions based on current stage
     if (!dialog) {
-      // Dialog closed: perform side-effects depending on stage
-      if (questOnCloseId) {
-        this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestStarted, { player, questId: questOnCloseId });
-
-        // Inform NpcManager immediately for per-player gating
-        const mgrOnAccept = this.getNpcManager();
-        if (mgrOnAccept && (mgrOnAccept as any)['setQuestAccepted']) {
-          try { (mgrOnAccept as any).setQuestAccepted(player, questOnCloseId); } catch { /* ignore */ }
-        }
-
-        const soundGizmo = this.props.questAcceptedSound?.as(AudioGizmo);
-        const options = {
-          fade: 0,
-          players: [player],
-          audibilityMode: AudibilityMode.AudibleTo,
-        };
-        soundGizmo && soundGizmo.play(options);
-      }
-
-      // If your dialog step implies talking to NPC completes an objective,
-      // emit a CheckPlayerQuestSubmission using npc token.
-      const npcName = ((this.props.name as string) || '').toLowerCase();
-      this.sendLocalBroadcastEvent(EventsService.QuestEvents.CheckPlayerQuestSubmission, {
-        player,
-        itemType: `npc:${npcName}`,
-        amount: 1,
-      });
+      this.handleQuestAction(player, questLog, stage);
     }
+
     if (dialog) {
-      dialog.title = this.props.name
+      dialog.title = this.props.name;
     }
+
     // Inform NpcManager about dialog state for gating animations/sounds
     const mgr = this.getNpcManager();
     if (mgr && (mgr as any)['setDialogOpen']) {
       try { (mgr as any).setDialogOpen(player, !!dialog); } catch { /* ignore */ }
     }
-    this.sendNetworkBroadcastEvent(DialogEvents.sendDialogScript, { container: dialog }, [player])
+    this.sendNetworkBroadcastEvent(DialogEvents.sendDialogScript, { container: dialog }, [player]);
+  }
+
+  /**
+   * Converts the player's persistent quest log into a stage string
+   * that the DialogScript can understand.
+   */
+  private getStageStringFromLog(log: QuestLog): TUTORIAL_QUEST_STAGES {
+    switch (log.status) {
+      case 'Completed':
+        return TUTORIAL_QUEST_STAGES.STAGE_COMPLETE;
+
+      case 'InProgress':
+        // Map the numerical step to our stage strings
+        switch (log.currentStepIndex) {
+          case 1: return TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT;
+          case 2: return TUTORIAL_QUEST_STAGES.STAGE_STEP_2_RETURN_COCONUTS;
+          case 3: return TUTORIAL_QUEST_STAGES.STAGE_STEP_3_KILL;
+          case 4: return TUTORIAL_QUEST_STAGES.STAGE_STEP_4_RETURN_MEAT;
+          case 5: return TUTORIAL_QUEST_STAGES.STAGE_STEP_5_COLLECT;
+          case 6: return TUTORIAL_QUEST_STAGES.STAGE_STEP_6_RETURN_LOGS;
+          default:
+            // Failsafe, should not happen if logic is correct
+            console.warn(`[NPC] Player is InProgress on quest but has unknown step: ${log.currentStepIndex}`);
+            return TUTORIAL_QUEST_STAGES.STAGE_NOT_STARTED;
+        }
+
+      case 'NotStarted':
+      default:
+        return TUTORIAL_QUEST_STAGES.STAGE_NOT_STARTED;
+    }
+  }
+
+  /**
+   * Performs the correct quest action (start, advance, complete)
+   * when the player closes a dialog with this NPC.
+   */
+  private handleQuestAction(player: hz.Player, log: QuestLog, currentStage: TUTORIAL_QUEST_STAGES) {
+    const tutorialDao = PlayerStateService.instance.getTutorialDAO(player);
+
+    if (!tutorialDao) {
+      console.error(`[NPC] Could not get QuestDAO for player ${player.name.get()}`);
+      return;
+    }
+
+
+
+    // Use a switch on the CURRENT step to decide the NEXT action.
+    switch (currentStage) {
+      case TUTORIAL_QUEST_STAGES.STAGE_NOT_STARTED: // Player was "NotStarted" and just accepted the quest
+        // Player just accepted the quest
+        console.log(`[NPC] Starting quest '${TUTORIAL_QUEST_KEY}' for ${player.name.get()}`);
+        tutorialDao.setActiveQuest(TUTORIAL_QUEST_KEY, 1);
+        this.playQuestAcceptedSound(player);
+
+        // FIRE the QuestStarted event so QuestManager can spawn bag, etc.
+        this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestStarted, {
+          player,
+          questId: TUTORIAL_QUEST_KEY
+        });
+        break;
+
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT: // Player is returning coconuts
+        // Player is currently collecting coconuts, they're just chatting
+        console.log(`[NPC] Player ${player.name.get()} is still on step 1 (collecting coconuts)`);
+        break;
+
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_2_RETURN_COCONUTS:
+        // Player is returning coconuts
+        console.log(`[NPC] Player ${player.name.get()} turned in coconuts, advancing to step 3`);
+        tutorialDao.updateQuestStep(TUTORIAL_QUEST_KEY, 3); // Advance to "Kill Chickens"
+        this.playQuestAcceptedSound(player);
+
+        // Emit progress update
+        this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, {
+          player,
+          questId: TUTORIAL_QUEST_KEY,
+          stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_3_KILL
+        });
+        break;
+
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_3_KILL:
+        // Player is currently killing chickens, they're just chatting
+        console.log(`[NPC] Player ${player.name.get()} is still on step 3 (killing chickens)`);
+        break;
+
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_4_RETURN_MEAT:
+        // Player is returning meat
+        console.log(`[NPC] Player ${player.name.get()} turned in meat, advancing to step 5`);
+        tutorialDao.updateQuestStep(TUTORIAL_QUEST_KEY, 5); // Advance to "Collect Logs"
+        this.playQuestAcceptedSound(player);
+
+        this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, {
+          player,
+          questId: TUTORIAL_QUEST_KEY,
+          stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_5_COLLECT
+        });
+        break;
+
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_5_COLLECT:
+        // Player is currently collecting logs, they're just chatting
+        console.log(`[NPC] Player ${player.name.get()} is still on step 5 (collecting logs)`);
+        break;
+
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_6_RETURN_LOGS:
+        // Player is returning logs and completing the quest
+        console.log(`[NPC] Player ${player.name.get()} turned in logs, completing quest`);
+        tutorialDao.completeQuest(TUTORIAL_QUEST_KEY);
+        tutorialDao.setTutorialCompleted(true);
+        this.playQuestAcceptedSound(player);
+
+        this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestCompleted, {
+          player,
+          questId: TUTORIAL_QUEST_KEY
+        });
+        break;
+
+      case TUTORIAL_QUEST_STAGES.STAGE_COMPLETE:
+        // Quest is already done, just chatting
+        console.log(`[NPC] Player ${player.name.get()} has already completed the quest`);
+        break;
+
+      default:
+        console.warn(`[NPC] Unknown stage: ${currentStage} for player ${player.name.get()}`);
+        break;
+    }
+  }
+
+  private playQuestAcceptedSound(player: hz.Player) {
+    const soundGizmo = this.props.questAcceptedSound?.as(AudioGizmo);
+    const options = {
+      fade: 0,
+      players: [player],
+      audibilityMode: AudibilityMode.AudibleTo,
+    };
+    soundGizmo && soundGizmo.play(options);
   }
 
   // Resolve NpcManager from prop or nearby entities (parent subtree)

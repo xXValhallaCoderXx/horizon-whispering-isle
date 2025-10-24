@@ -1,5 +1,5 @@
-import { PlayerState } from 'constants';
-import { AudioGizmo, Component, PropTypes, SpawnPointGizmo, Player, CodeBlockEvents, AudioOptions, Entity, AudibilityMode, PlayerVisibilityMode, Asset, GrabbableEntity } from 'horizon/core';
+import { EventsService, PlayerState } from 'constants';
+import { AudioGizmo, Component, PropTypes, SpawnPointGizmo, Player, CodeBlockEvents, AttachablePlayerAnchor, AttachableEntity, AudioOptions, Entity, AudibilityMode, PlayerVisibilityMode, Asset, GrabbableEntity } from 'horizon/core';
 import { PlayerStateService } from 'PlayerStateService';
 
 class WorldManager extends Component<typeof WorldManager> {
@@ -18,76 +18,61 @@ class WorldManager extends Component<typeof WorldManager> {
   preStart(): void {
     this.connectCodeBlockEvent(this.entity, CodeBlockEvents.OnPlayerEnterWorld, this.playerEnterWorld)
     this.connectCodeBlockEvent(this.entity, CodeBlockEvents.OnPlayerExitWorld, this.playerExitWorld)
+    this.connectLocalBroadcastEvent(
+      EventsService.PlayerEvents.OnPlayerStateLoaded,
+      (payload: { player: Player; state: PlayerState }) => {
+        this.playerDataInitialized(payload.player);
+      }
+    );
   }
 
   start() { }
 
   private playerEnterWorld = (player: Player) => {
-
-    // Play welcome sound
-    const soundGizmo = this.props.welcomeSound?.as(AudioGizmo);
+    this.currentActivePlayers.add(player);
+    const welcomeSound = this.props.welcomeSound?.as(AudioGizmo);
     const options: AudioOptions = {
       fade: 0,
       players: [player],
       audibilityMode: AudibilityMode.AudibleTo,
     };
-    soundGizmo && soundGizmo.play(options);
+    welcomeSound && welcomeSound.play(options);
+  }
 
-
-    const playerState = this.initializePlayer(player);
-    this.currentActivePlayers.add(player);
-    if (playerState?.tutorial?.completed) {
+  private async playerDataInitialized(player: Player) {
+    console.log(`[WorldManager] Player ${player.name.get()} data initialized.`);
+    const tutorialDao = PlayerStateService.instance?.getTutorialDAO(player);
+    const isTutorialComplete = tutorialDao?.getTutorialCompletionStatus();
+    const inventoryDao = PlayerStateService.instance?.getInventoryDAO(player);
+    const isStorageInitialized = inventoryDao?.getIsStorageBagAcquired();
+    if (isStorageInitialized && this.props.playerStorageAsset) {
+      this.handleAttachAsset(player);
+    }
+    if (isTutorialComplete) {
       this.teleportPlayer(player, this.props.mainIslandSpawnPoint);
     } else {
       this.teleportPlayer(player, this.props.tutorialIslandSpawnPoint);
     }
   }
 
-  private initializePlayer(player: Player): PlayerState | void | null {
-    const playerService = this.playerService();
-    if (!playerService) {
-      console.error('[WorldManager] PlayerStateService not found!');
-      return;
-    }
-    // Load state and broadcast to all listeners (including QuestManager)
-    const state = playerService.loadAndBroadcastState(player);
-    console.log(`[WorldManager] Player ${player.name.get()} state loaded. Active quest: ${state.quests.active || 'none'}`);
-    return state;
-  }
-
   private playerExitWorld = (player: Player) => {
-    console.log(`[WorldManager] Player ${player.name.get()} has exited the world.`);
     this.currentActivePlayers.delete(player);
   }
 
-
-  private async handleGeneratingPlayerStorageItem(player: Player) {
-    console.log(`Generating storage item for player ${player.name.get()}`);
+  private async handleAttachAsset(player: Player) {
     const asset = this.props.playerStorageAsset as Asset
-    console.log("Player Storage Asset: ", asset);
     const spawnPosition = player.position.get();
-    console.log("Spawn Position: ", spawnPosition);
     const spawnedEntities = await this.world.spawnAsset(asset, spawnPosition);
-    console.log("Spawned Entities: ", spawnedEntities);
     const rootEntity = spawnedEntities[0];
-
+    rootEntity.setVisibilityForPlayers([player], PlayerVisibilityMode.HiddenFrom);
+    rootEntity.visible.set(false);
+    rootEntity.simulated.set(false);
+    const attachable = rootEntity.as(AttachableEntity);
+    attachable.attachToPlayer(player, AttachablePlayerAnchor.Torso);
+    rootEntity.owner.set(player);
     rootEntity.visible.set(true);
     rootEntity.setVisibilityForPlayers([player], PlayerVisibilityMode.VisibleTo);
 
-    const grabbable = rootEntity.as(GrabbableEntity);
-    grabbable.setWhoCanGrab([player]);
-    console.log(`Set grabbable for player ${player.name.get()}`);
-  }
-
-
-
-  private playerService(): PlayerStateService | null {
-    const gizmo = this.props.playerServiceAsset as Entity;
-    if (!gizmo) return null;
-    const comp = gizmo.getComponents(PlayerStateService)[0] as
-      | PlayerStateService
-      | undefined;
-    return comp ?? null;
   }
 
   private teleportPlayer(player: Player, spawnPoint: Entity | null | undefined) {
@@ -95,7 +80,6 @@ class WorldManager extends Component<typeof WorldManager> {
       console.error(`[PlayerSpawnManager] Spawn point is not set.`);
       return;
     }
-
     const gizmo = spawnPoint.as(SpawnPointGizmo);
     if (gizmo) {
       console.log(`[PlayerSpawnManager] Teleporting ${player.name.get()}.`);

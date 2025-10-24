@@ -1,8 +1,6 @@
 import { DialogContainer } from 'Dialog_UI';
 import * as hz from 'horizon/core';
-
-// Local stage type to avoid cross-file coupling
-export type QuestStage = 'NotStarted' | 'Collecting' | 'ReturnToNPC' | 'Hunting' | 'Complete';
+import { TUTORIAL_QUEST_STAGES, TUTORIAL_QUEST_KEY } from 'TutorialQuestDAO';
 
 // For conversations that can loop back on themselves, terminate after this many steps
 const MAX_TREE_LENGTH = 16;
@@ -10,41 +8,10 @@ const MAX_TREE_LENGTH = 16;
 // Local dialogue data (no editor props required)
 // Each node has a response and up to 3 options (index-based navigation)
 type LocalOption = { text: string; next?: string | null; close?: boolean };
-type LocalNode = { id: string; response: string; options: LocalOption[], startQuestOnEnter?: string };
-const DIALOG: Record<string, LocalNode> = {
-  root: {
-    id: 'root',
-    response: "Welcome! You're lucky you were brought ashore, the storm was rough. I can help you off here, interested?",
-    options: [
-      { text: 'Yes (Continue)', next: 'interested' },
-      { text: 'Where am I?', next: 'where' },
-    ],
-  },
-  where: {
-    id: 'where',
-    response: 'This is Whispering Isle, we need help from people to help us.',
-    options: [
-      { text: 'Yes (Continue)', next: 'interested' },
-      { text: 'No', close: true },
-    ],
-  },
-  interested: {
-    id: 'interested',
-    response: "Great! We need some resources gathered, if you help me, I can get you off the island:",
-    options: [
-      { text: 'Yes (Continue)', next: 'continued' },
-      { text: 'No', next: 'notReady' },
-    ],
-  },
-  notReady: {
-    id: 'notReady',
-    response: "Oh, when you're ready speak to me",
-    options: [
-      { text: 'OK', close: true },
-    ],
-  },
-  continued: { id: 'continued', response: 'Great! Collect 5 coconuts, and put them in the barrel next to me.', options: [{ text: 'OK', close: true }], startQuestOnEnter: 'tutorial_survival' },
-};
+type LocalNode = { id: string; response: string; options: LocalOption[], startQuestOnEnter?: string, questId?: string };
+
+
+
 
 const DIALOG_INTRO: Record<string, LocalNode> = {
   root: {
@@ -78,46 +45,98 @@ const DIALOG_INTRO: Record<string, LocalNode> = {
       { text: 'OK', close: true },
     ],
   },
-  continued: { id: 'continued', response: 'Great! Collect 5 coconuts, and put them in the barrel next to me.', options: [{ text: 'OK', close: true }], startQuestOnEnter: 'tutorial_survival' },
+  continued: { id: 'continued', response: 'Great! Collect 5 coconuts, and put them in the barrel next to me.', options: [{ text: 'OK', close: true }], startQuestOnEnter: TUTORIAL_QUEST_KEY },
 };
 
-const DIALOG_RETURN: Record<string, LocalNode> = {
+
+// Player has quest, needs to collect
+const DIALOG_STEP_1_COLLECT: Record<string, LocalNode> = {
   root: {
     id: 'root',
-    response: "You're back! Here's the Axe I promised. Use it to hunt a chicken.",
-    options: [{ text: 'Thanks!', close: true }],
-  },
-};
-const DIALOG_COLLECTING: Record<string, LocalNode> = {
-  root: {
-    id: 'root',
-    response: 'Bring me 5 coconuts and drop them in the barrel next to me.',
+    response: 'Bring me 5 coconuts and you can collect them in your new sack.',
     options: [{ text: 'OK', close: true }],
   },
 };
-const DIALOG_HUNTING: Record<string, LocalNode> = {
+
+
+// Player has collected, needs to return
+const DIALOG_STEP_2_RETURN: Record<string, LocalNode> = {
   root: {
     id: 'root',
-    response: "Go find a chicken and take it down with your Axe.",
-    options: [{ text: 'On it!', close: true }],
-  },
-};
-const DIALOG_COMPLETE: Record<string, LocalNode> = {
-  root: {
-    id: 'root',
-    response: "Well done — you’ve completed the tutorial quest!",
-    options: [{ text: 'Awesome', close: true }],
+    response: "You're back! And you have the coconuts! Great. Here's the Axe I promised. Now, use it to hunt 3 chickens.",
+    options: [{ text: 'Thanks!', close: true }],
+    questId: TUTORIAL_QUEST_KEY // This node will advance the quest
   },
 };
 
-function getTreeForStage(stage: QuestStage): Record<string, LocalNode> {
+// Player has quest, needs to hunt
+const DIALOG_STEP_3_KILL: Record<string, LocalNode> = {
+  root: {
+    id: 'root',
+    response: "Go find 3 chickens and take them down with your Axe.",
+    options: [{ text: 'On it!', close: true }],
+  },
+};
+
+
+// Player has killed, needs to return
+const DIALOG_STEP_4_RETURN: Record<string, LocalNode> = {
+  root: {
+    id: 'root',
+    response: "Nice work with that axe. Just one last thing: bring me 5 logs.",
+    options: [{ text: 'OK', close: true }],
+    questId: TUTORIAL_QUEST_KEY // This node will advance the quest
+  },
+};
+
+// Player has quest, needs to collect logs
+const DIALOG_STEP_5_COLLECT: Record<string, LocalNode> = {
+  root: {
+    id: 'root',
+    response: "I still need those 5 logs to finish the repairs.",
+    options: [{ text: 'Working on it!', close: true }],
+  },
+};
+
+// Player has logs, needs to return
+const DIALOG_STEP_6_RETURN: Record<string, LocalNode> = {
+  root: {
+    id: 'root',
+    response: "Perfect! That's everything. You've been a great help. You're free to go!",
+    options: [{ text: 'Awesome', close: true }],
+    questId: TUTORIAL_QUEST_KEY // This node will complete the quest
+  },
+};
+
+// Quest is finished
+const DIALOG_COMPLETE: Record<string, LocalNode> = {
+  root: {
+    id: 'root',
+    response: "Well done — you’ve completed the tutorial quest! Thanks again for the help.",
+    options: [{ text: 'You got it.', close: true }],
+  },
+};
+
+
+function getTreeForStage(stage: TUTORIAL_QUEST_STAGES): Record<string, LocalNode> {
   switch (stage) {
-    case 'ReturnToNPC': return DIALOG_RETURN;
-    case 'Hunting': return DIALOG_HUNTING;
-    case 'Complete': return DIALOG_COMPLETE;
-    case 'Collecting': return DIALOG_COLLECTING; // do not re-offer quest start
+    case 'Step_1_Collect_Coconuts':
+      return DIALOG_STEP_1_COLLECT;
+    case 'Step_2_Return_Coconuts':
+      return DIALOG_STEP_2_RETURN;
+    case 'Step_3_Kill_Chickens':
+      return DIALOG_STEP_3_KILL;
+    case 'Step_4_Return_Meat':
+      return DIALOG_STEP_4_RETURN;
+    case 'Step_5_Collect_Logs':
+      return DIALOG_STEP_5_COLLECT;
+    case 'Step_6_Return_Logs':
+      return DIALOG_STEP_6_RETURN;
+    case 'Complete':
+      return DIALOG_COMPLETE;
     case 'NotStarted':
-    default: return DIALOG_INTRO;
+    default:
+      return DIALOG_INTRO;
   }
 }
 
@@ -139,14 +158,10 @@ function traverseByKeyFor(tree: Record<string, LocalNode>, key: number[]): { nod
   return { node, close: false };
 }
 
-// Back-compat traversal using the default DIALOG tree
-function traverseByKey(key: number[]): { node?: LocalNode; close?: boolean } {
-  return traverseByKeyFor(DIALOG, key);
-}
 
-export function getNodeByKey(key: number[]) {
-  const { node } = traverseByKey(key);
-  console.log('getNodeByKey', key, node);
+
+export function getNodeByKey(tree: Record<string, LocalNode>, key: number[]) {
+  const { node } = traverseByKeyFor(tree, key);
   return node;
 }
 
@@ -156,28 +171,8 @@ export class DialogScript extends hz.Component<typeof DialogScript> {
   // Build dialog from local constants instead of editor-linked entities
   start() { }
 
-  /**
-   * Retrieves a dialog from the local dialog tree based on the provided key sequence.
-   * key is the option index path chosen so far (e.g., [0,1]).
-   */
-  getDialogFromTree(key: number[]): DialogContainer | undefined {
-    // Safety: avoid infinite paths
-    if (key.length >= MAX_TREE_LENGTH) {
-      return { response: 'You talk too much!', option1Text: 'Okay, sorry' };
-    }
 
-    const { node, close } = traverseByKey(key);
-    if (!node || close) return undefined; // close UI
-
-    return {
-      response: node.response,
-      option1Text: node.options[0]?.text ?? 'OK',
-      option2Text: node.options[1]?.text,
-      option3Text: node.options[2]?.text,
-    };
-  }
-
-  getDialogFromTreeForStage(stage: QuestStage, key: number[]): DialogContainer | undefined {
+  getDialogFromTreeForStage(stage: TUTORIAL_QUEST_STAGES, key: number[]): DialogContainer | undefined {
     // Safety: avoid infinite paths
     if (key.length >= MAX_TREE_LENGTH) {
       return { response: 'You talk too much!', option1Text: 'Okay, sorry' };
@@ -195,19 +190,16 @@ export class DialogScript extends hz.Component<typeof DialogScript> {
     };
   }
 
-  public getQuestIdForPath(key: number[]): string | null {
-    const node = getNodeByKey(key);
-    return (node as any)?.startQuestOnEnter ?? null;
-  }
 
-  /**
-   * Returns questId when the LAST chosen option closes the dialog.
-   * This lets us trigger the quest after the player confirms (presses OK).
-   * Logic: walk the path; if the final option has `close: true`, return the
-   * previous node's startQuestOnEnter (if any). Otherwise return null.
-   */
-  public getQuestIdOnClose(key: number[]): string | null {
-    let node: LocalNode | undefined = DIALOG['root'];
+
+/**
+    * Returns questId when the LAST chosen option closes the dialog.
+    * This lets us trigger the quest after the player confirms (presses OK).
+    */
+  // --- MODIFIED: This function now requires the correct tree to be passed in ---
+  public getQuestIdOnClose(stage: TUTORIAL_QUEST_STAGES, key: number[]): string | null {
+    const tree = getTreeForStage(stage);
+    let node: LocalNode | undefined = tree['root'];
     if (!node) return null;
 
     for (let i = 0; i < key.length; i++) {
@@ -218,7 +210,7 @@ export class DialogScript extends hz.Component<typeof DialogScript> {
       const isLast = i === key.length - 1;
       if (opt.close === true) {
         // If the last selected option is a closing option, trigger quest based on the node being closed
-        return isLast ? ((node as any)?.startQuestOnEnter ?? null) : null;
+        return isLast ? (node.questId ?? null) : null;
       }
 
       if (!opt.next) {
@@ -226,11 +218,13 @@ export class DialogScript extends hz.Component<typeof DialogScript> {
         return null;
       }
 
-      const nextNode: LocalNode | undefined = DIALOG[opt.next as string];
+      const nextNode: LocalNode | undefined = tree[opt.next as string];
       if (!nextNode) return null;
       node = nextNode;
     }
 
+    // This case means the path ended but didn't "close"
+    // (e.g., they are on a node with options)
     return null;
   }
 }
