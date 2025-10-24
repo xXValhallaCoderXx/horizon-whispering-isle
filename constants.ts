@@ -11,19 +11,29 @@ export class EventsService {
     static readonly PlayerEvents = {
         OnPlayerStateLoaded: new LocalEvent<{ player: Player }>('player.on_player_state_loaded'),
     }
-    static readonly AssetEvents = {
-        DestroyAsset: new NetworkEvent<{ entityId: string; player: Player }>("DestroyAsset"),
-    }
+
     static readonly QuestEvents = {
+
+        QuestStarted: new LocalEvent<QuestPayload>(),
+        DisplayQuestHUD: new NetworkEvent<{ player: Player; questId: string; title: string }>("DisplayQuestHUD"),
+
+        // NOT USED YET
         // Use NetworkEvent so client-side item scripts can notify the server QuestManager
         SubmitQuestCollectProgress: new NetworkEvent<{ player: Player; itemId: string; amount: number; entityId?: string }>("SubmitQuestCollectProgress"),
         CheckPlayerQuestSubmission: new LocalEvent<CheckQuestSubmissionPayload>(),
-        QuestStarted: new LocalEvent<QuestPayload>(),
+
         QuestCompleted: new LocalEvent<QuestPayload>(),
         // Broadcast whenever a player's quest progress changes; used for NPC dialog gating
         QuestProgressUpdated: new LocalEvent<QuestProgressUpdatedPayload>(),
         // (Legacy quest stage request/response removed; dialog should derive from objective state through QuestManager APIs.)
     }
+
+
+
+    static readonly AssetEvents = {
+        DestroyAsset: new NetworkEvent<{ entityId: string; player: Player }>("DestroyAsset"),
+    }
+
 
 
     static readonly CombatEvents = {

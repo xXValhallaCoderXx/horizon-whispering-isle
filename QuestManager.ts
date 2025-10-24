@@ -16,8 +16,15 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     collectVfx: { type: hz.PropTypes.Entity },
   };
 
-
   preStart(): void {
+    // When tutorial quest is started, mark stage and spawn bag
+    this.connectLocalBroadcastEvent(
+      EventsService.QuestEvents.QuestStarted,
+      (payload: QuestPayload) => this.onQuestStarted(payload)
+    );
+
+    // TODO BELOW
+
 
     // --- Quest submission handlers ---
     this.connectNetworkBroadcastEvent(
@@ -25,11 +32,6 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       this.checkQuestCollectionSubmission.bind(this)
     );
 
-    // When tutorial quest is started, mark stage and spawn bag
-    this.connectLocalBroadcastEvent(
-      EventsService.QuestEvents.QuestStarted,
-      (payload: QuestPayload) => this.onQuestStarted(payload)
-    );
 
     // Handle generic quest submissions (e.g., Talk/Hunt tokens)
     this.connectLocalBroadcastEvent(
@@ -39,6 +41,49 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   }
 
   start() { }
+
+  // VERIFIED
+  private async onQuestStarted(payload: QuestPayload) {
+    console.log("BLAH")
+
+    const { player, questId } = payload;
+    console.log(`[QuestManager] Quest started event received: questId=${questId}, player=${player?.name.get()}`);
+
+    if (!player || !questId) {
+      console.error('[QuestManager] Invalid QuestStarted payload');
+      return;
+    }
+
+    const questDAO = PlayerStateService.instance?.getTutorialDAO(player);
+    if (!questDAO) {
+      console.error('[QuestManager] Could not get quest DAO for player');
+      return;
+    }
+    const questLog = questDAO.getQuestLog(questId);
+    if (questLog.status !== 'InProgress') {
+      console.warn(`[QuestManager] Quest ${questId} not in progress for ${player.name.get()}`);
+      return;
+    }
+    await this.spawnStorageBagForPlayer(player);
+
+    const inventoryDAO = PlayerStateService.instance.getInventoryDAO(player);
+    if (inventoryDAO) {
+      inventoryDAO.setIsStorageBagAcquired(true);
+      console.log(`[QuestManager] Storage bag marked as acquired for ${player.name.get()}`);
+    }
+
+    this.sendNetworkBroadcastEvent(EventsService.QuestEvents.DisplayQuestHUD, { player, questId: questId, title: "Weeee" });
+
+    this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, {
+      player,
+      questId: questId,
+      stage: questLog.currentStepIndex.toString() // or map to TUTORIAL_QUEST_STAGES enum
+    });
+    console.log(`[QuestManager] Quest started successfully for ${player.name.get()}`);
+  }
+
+  // TODO BELOW
+
 
   private checkQuestCollectionSubmission(payload: QuestSubmitCollectProgress): boolean {
     const { itemId, player, amount, entityId } = payload;
@@ -124,71 +169,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   }
 
 
-  private async onQuestStarted(payload: QuestPayload) {
-    console.log("BLAH")
 
-    const { player, questId } = payload;
-    console.log(`[QuestManager] Quest started event received: questId=${questId}, player=${player?.name.get()}`);
-
-    if (!player || !questId) {
-      console.error('[QuestManager] Invalid QuestStarted payload');
-      return;
-    }
-
-    const questDAO = PlayerStateService.instance?.getTutorialDAO(player);
-    if (!questDAO) {
-      console.error('[QuestManager] Could not get quest DAO for player');
-      return;
-    }
-
-    const questLog = questDAO.getQuestLog(questId);
-    if (questLog.status !== 'InProgress') {
-      console.warn(`[QuestManager] Quest ${questId} not in progress for ${player.name.get()}`);
-      return;
-    }
-
-    await this.spawnStorageBagForPlayer(player);
-
-
-    const inventoryDAO = PlayerStateService.instance.getInventoryDAO(player);
-    if (inventoryDAO) {
-      inventoryDAO.setIsStorageBagAcquired(true);
-      console.log(`[QuestManager] Storage bag marked as acquired for ${player.name.get()}`);
-    }
-
-
-    console.log(`[QuestManager] TODO: Show quest HUD for player ${player.name.get()}`);
-
-
-    this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, {
-      player,
-      questId: questId,
-      stage: questLog.currentStepIndex.toString() // or map to TUTORIAL_QUEST_STAGES enum
-    });
-    console.log(`[QuestManager] Quest started successfully for ${player.name.get()}`);
-    // const { player, questId } = payload;
-    // if (!player || !questId) return;
-    // const quest = this.ensureActiveQuest(player, questId, true);
-    // if (!quest) return;
-    // quest.status = QuestStatus.InProgress;
-    // // this.playerHasBag.set(player, false);
-
-    // const startingStepIndex = 0;
-    // // --- NEW: Persist active quest ---
-    // if (PlayerStateService.instance) {
-    //   PlayerStateService.instance.setActiveQuest(player, questId, startingStepIndex);
-    // }
-
-    // await this.spawnStorageBagForPlayer(player);
-    // const firstObjective = quest.objectives[startingStepIndex];
-    // console.log(
-    //   `[QuestManager] Quest started: ${questId} for ${player.name.get()}\n` +
-    //   `  Total Steps: ${quest.objectives.length}\n` +
-    //   `  Starting Step: ${startingStepIndex} - ${firstObjective?.description ?? 'Unknown'}`
-    // );
-    // this.emitQuestProgressUpdated(player, quest);
-    //  this.updateHudForCurrentStep(player, quest, startingStepIndex);
-  }
 
   // --- MODIFIED: onGenericQuestSubmission now persists progress ---
   // Handle local submissions such as Talk/Hunt tokens emitted by NPC or enemies

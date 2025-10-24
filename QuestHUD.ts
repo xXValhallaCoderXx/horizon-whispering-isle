@@ -1,5 +1,6 @@
-import { PropTypes } from 'horizon/core'
-import { UIComponent, View, Image, UINode, ImageSource, ViewStyle, ImageStyle, Text, Binding, TextStyle } from 'horizon/ui'
+import { PropTypes, Player } from 'horizon/core'
+import { EventsService } from 'constants';
+import { UIComponent, View, Image, UINode, ImageSource, ViewStyle, ImageStyle, Text, Binding, TextStyle, } from 'horizon/ui'
 
 
 export class QuestHUD extends UIComponent<typeof QuestHUD> {
@@ -8,79 +9,51 @@ export class QuestHUD extends UIComponent<typeof QuestHUD> {
     frameTexture: { type: PropTypes.Asset },
 
   }
-
-  // Bindings for reactive state
   private titleTextBinding = new Binding<string>("");
-  private isVisibleBinding = new Binding<boolean>(false); // This controls visibility
+  private isVisibleBinding = new Binding<boolean>(true); // This controls visibility
 
   initializeUI(): UINode {
-  // -----------------------------------------------------------------
-  // MODIFICATION:
-  // Wrap your entire UI definition in UINode.if()
-  // This links the 'isVisibleBinding' to the actual rendering
-  // of the component.
-  // -----------------------------------------------------------------
-  return UINode.if(this.isVisibleBinding,
-      View({
+    return View({
         style: RootStyle,
-        children: [
-          // Background Frame
+      children: [
           Image({
             source: ImageSource.fromTextureAsset(this.props.frameTexture!),
             style: FrameStyle,
           }),
-
-          // Content Container
           View({
             style: ContentContainerStyle,
             children: [
               Text({
                 text: this.titleTextBinding,
                 style: TitleTextStyle,
-              }),
-              // You can add more UI elements here, like quest objectives
+              })
             ]
           })
         ],
-      })
-      // When the binding is false, it will render 'null' (nothing)
-    )
+    })
   }
 
-  // --- Public API ---
-  // These methods are called from your parent script (e.g., QuestManager)
-  // to control the HUD's state.
-
-  /**
-   * Shows the Quest HUD.
-   */
-  public show() {
-    this.isVisibleBinding.set(true);
+  start() {
+    this.connectNetworkBroadcastEvent(EventsService.QuestEvents.DisplayQuestHUD,
+      (data: { player: Player, title: string, visible: boolean }) => {
+        const localPlayer = this.world.getLocalPlayer();
+        console.log(`[QuestHUD] Received DisplayQuestHUD event for player: ${data.player.name.get()}`);
+        // Critical check: Process updates only if they target this player.
+        // Since this script is Local, it should be owned by the player it serves.
+        if (localPlayer && this.entity.owner.get() === localPlayer) {
+          // Now apply the updates using the private internal method
+          this.updateUIBindings(data.title, data.visible);
+        }
+      });
   }
 
-  /**
-   * Hides the Quest HUD.
-   */
-  public hide() {
-    this.isVisibleBinding.set(false);
-  }
-
-  /**
-   * Sets the visibility of the Quest HUD.
-   * @param visible True to show, false to hide.
-   */
-  public setVisible(visible: boolean) {
-    this.isVisibleBinding.set(visible);
-  }
-
-  /**
-   * Updates the HUD content and visibility in one call.
-   * @param title The new quest title to display.
-   * @param visible True to show, false to hide.
-   */
-  public updateQuest(title: string, visible: boolean) {
+  private updateUIBindings(title: string, visible: boolean): void {
     this.titleTextBinding.set(title);
     this.isVisibleBinding.set(visible);
+
+    // OPTIMIZATION: Toggle the entity's visible property, not just the UINode.if(),
+    // to potentially release textures to GC if hidden [16-18].
+    this.entity.visible.set(visible);
   }
 
 
