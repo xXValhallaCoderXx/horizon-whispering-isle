@@ -13,9 +13,10 @@ export class QuestHUD extends UIComponent<typeof QuestHUD> {
   private isVisibleBinding = new Binding<boolean>(true); // This controls visibility
 
   initializeUI(): UINode {
-    return View({
+    return UINode.if(this.isVisibleBinding,
+      View({
         style: RootStyle,
-      children: [
+        children: [
           Image({
             source: ImageSource.fromTextureAsset(this.props.frameTexture!),
             style: FrameStyle,
@@ -30,7 +31,8 @@ export class QuestHUD extends UIComponent<typeof QuestHUD> {
             ]
           })
         ],
-    })
+      })
+  )
   }
 
   start() {
