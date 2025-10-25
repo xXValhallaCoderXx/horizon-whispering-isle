@@ -30,6 +30,11 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       (payload: QuestPayload) => this.onQuestStarted(payload)
     );
 
+    this.connectLocalBroadcastEvent(
+      EventsService.QuestEvents.RefreshQuestHUD,
+      (payload: QuestPayload) => this.onRefreshQuestHUD(payload)
+    );
+
     // TODO BELOW
 
 
@@ -70,6 +75,41 @@ class QuestManager extends hz.Component<typeof QuestManager> {
         });
       }, 1500);
     }
+  }
+
+  private onRefreshQuestHUD(payload: QuestPayload): void {
+    const { player, questId } = payload;
+
+    console.log(`[QuestManager] Refreshing HUD for ${player.name.get()}`);
+
+    const questDAO = PlayerStateService.instance?.getTutorialDAO(player);
+    if (!questDAO) {
+      console.error(`[QuestManager] Could not get TutorialDAO for player`);
+      return;
+    }
+
+    const quest = questDAO.getQuestLog(questId);
+    if (!quest) {
+      console.error(`[QuestManager] Could not find quest log`);
+      return;
+    }
+
+    // Get current stage config for transition message
+    const stageConfig = questDAO.getStageByStepIndex(quest.currentStepIndex);
+    if (stageConfig) {
+      // Show transition message
+      this.world.ui.showPopupForPlayer(player, stageConfig.description, 4);
+    }
+
+    // Update HUD with new objective
+    const objectiveText = this.getQuestObjectiveText(player, questId);
+    this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, {
+      player,
+      title: "Tutorial",
+      questId: questId,
+      visible: true,
+      objective: objectiveText
+    });
   }
 
 
@@ -271,9 +311,9 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       console.error(`[QuestManager] Could not find stage config for step ${quest.currentStepIndex}`);
       return;
     }
-
+    console.error("ERROROR: ", currentStageConfig)
     // Check if there's a next step
-    if (!currentStageConfig.nextStepIndex) {
+    if (currentStageConfig.nextStepIndex === undefined || currentStageConfig.nextStepIndex === null) {
       console.log(`[QuestManager] No next step defined, quest complete`);
       questDAO.completeQuest(questId);
 
@@ -298,8 +338,8 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     // Update the quest step
     questDAO.updateQuestStep(questId, nextStepIndex);
 
-    // Get the refreshed quest log
-    const updatedQuest = questDAO.getQuestLog(questId);
+
+
 
     // Get new stage config
     const newStageConfig = questDAO.getStageByStepIndex(nextStepIndex);

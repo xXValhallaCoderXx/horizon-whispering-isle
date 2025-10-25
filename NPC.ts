@@ -21,6 +21,7 @@ export class NPC extends hz.Component<typeof NPC> {
     dialogScript: { type: hz.PropTypes.Entity }, // first entity in the list of dialog scripts
     questAcceptedSound: { type: hz.PropTypes.Entity },
     npcManager: { type: hz.PropTypes.Entity, default: undefined },
+    questManager: { type: hz.PropTypes.Entity },
   };
 
   private scriptData?: DialogScript;
@@ -128,14 +129,11 @@ export class NPC extends hz.Component<typeof NPC> {
       return;
     }
 
-
-
     // Use a switch on the CURRENT step to decide the NEXT action.
     switch (currentStage) {
       case TUTORIAL_QUEST_STAGES.STAGE_NOT_STARTED: // Player was "NotStarted" and just accepted the quest
         // Player just accepted the quest
         console.log(`[NPC] Starting quest '${TUTORIAL_QUEST_KEY}' for ${player.name.get()}`);
-
         this.playQuestAcceptedSound(player);
 
         // FIRE the QuestStarted event so QuestManager can spawn bag, etc.
@@ -145,22 +143,21 @@ export class NPC extends hz.Component<typeof NPC> {
         });
         break;
 
-      case TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT: // Player is returning coconuts
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT:
         // Player is currently collecting coconuts, they're just chatting
         console.log(`[NPC] Player ${player.name.get()} is still on step 1 (collecting coconuts)`);
         break;
 
       case TUTORIAL_QUEST_STAGES.STAGE_STEP_2_RETURN_COCONUTS:
-        // Player is returning coconuts
-        console.log(`[NPC] Player ${player.name.get()} turned in coconuts, advancing to step 3`);
-        tutorialDao.updateQuestStep(TUTORIAL_QUEST_KEY, 3); // Advance to "Kill Chickens"
+        // Player is returning coconuts - manually advance and update HUD
+        console.log(`[NPC] Player ${player.name.get()} turned in coconuts`);
         this.playQuestAcceptedSound(player);
 
-        // Emit progress update
-        this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, {
+        // Update the step in DAO
+        tutorialDao.updateQuestStep(TUTORIAL_QUEST_KEY, 3);
+        this.sendLocalBroadcastEvent(EventsService.QuestEvents.RefreshQuestHUD, {
           player,
-          questId: TUTORIAL_QUEST_KEY,
-          stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_3_KILL
+          questId: TUTORIAL_QUEST_KEY
         });
         break;
 
@@ -171,14 +168,16 @@ export class NPC extends hz.Component<typeof NPC> {
 
       case TUTORIAL_QUEST_STAGES.STAGE_STEP_4_RETURN_MEAT:
         // Player is returning meat
-        console.log(`[NPC] Player ${player.name.get()} turned in meat, advancing to step 5`);
-        tutorialDao.updateQuestStep(TUTORIAL_QUEST_KEY, 5); // Advance to "Collect Logs"
+        console.log(`[NPC] Player ${player.name.get()} turned in meat`);
         this.playQuestAcceptedSound(player);
 
-        this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, {
+        // Update the step in DAO
+        tutorialDao.updateQuestStep(TUTORIAL_QUEST_KEY, 5);
+
+        // Tell QuestManager to refresh the HUD
+        this.sendLocalBroadcastEvent(EventsService.QuestEvents.RefreshQuestHUD, {
           player,
-          questId: TUTORIAL_QUEST_KEY,
-          stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_5_COLLECT
+          questId: TUTORIAL_QUEST_KEY
         });
         break;
 
@@ -190,14 +189,16 @@ export class NPC extends hz.Component<typeof NPC> {
       case TUTORIAL_QUEST_STAGES.STAGE_STEP_6_RETURN_LOGS:
         // Player is returning logs and completing the quest
         console.log(`[NPC] Player ${player.name.get()} turned in logs, completing quest`);
+        this.playQuestAcceptedSound(player);
+
         tutorialDao.completeQuest(TUTORIAL_QUEST_KEY);
         tutorialDao.setTutorialCompleted(true);
-        this.playQuestAcceptedSound(player);
 
         this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestCompleted, {
           player,
           questId: TUTORIAL_QUEST_KEY
         });
+        this.world.ui.showPopupForPlayer(player, "Lets get ota haere!", 5);
         break;
 
       case TUTORIAL_QUEST_STAGES.STAGE_COMPLETE:
@@ -210,6 +211,8 @@ export class NPC extends hz.Component<typeof NPC> {
         break;
     }
   }
+
+
 
   private playQuestAcceptedSound(player: hz.Player) {
     const soundGizmo = this.props.questAcceptedSound?.as(AudioGizmo);

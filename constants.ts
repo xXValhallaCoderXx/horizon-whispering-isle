@@ -18,6 +18,7 @@ export class EventsService {
 
         QuestStarted: new LocalEvent<IQuestStarted>(), // Listen for when a new quest is started (Tutorial quest)
         DisplayQuestHUD: new NetworkEvent<IDisplayQuestHUD>("DisplayQuestHUD"), // Initiate showing the Quest HUD for a player
+        RefreshQuestHUD: new NetworkEvent<IDisplayQuestHUD>("RefreshQuestHUD"), // Update the Quest HUD for a player
         SubmitQuestCollectProgress: new NetworkEvent<ISubmitQuestCollectProgress>("SubmitQuestCollectProgress"), // When collecting an item - submit to check quest submission.
 
 
@@ -28,9 +29,6 @@ export class EventsService {
         CheckPlayerQuestSubmission: new LocalEvent<CheckQuestSubmissionPayload>(),
 
         QuestCompleted: new LocalEvent<QuestPayload>(),
-        // Broadcast whenever a player's quest progress changes; used for NPC dialog gating
-        QuestProgressUpdated: new LocalEvent<QuestProgressUpdatedPayload>(),
-        // (Legacy quest stage request/response removed; dialog should derive from objective state through QuestManager APIs.)
     }
 
 

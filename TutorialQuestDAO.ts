@@ -72,6 +72,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
   [TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT]: {
     stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT,
     stepIndex: 1,
+    nextStepIndex: 2, // ADD THIS - advance to return stage
     action: QuestStageAction.NONE,
     description: "Collecting coconuts (in progress)",
     objectives: [
@@ -89,11 +90,12 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     nextStepIndex: 3,
     action: QuestStageAction.ADVANCE_QUEST,
     description: "Return coconuts and advance to kill chickens",
-    objectives: [] // Turn-in stage, no new objectives
+    objectives: []
   },
   [TUTORIAL_QUEST_STAGES.STAGE_STEP_3_KILL]: {
     stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_3_KILL,
     stepIndex: 3,
+    nextStepIndex: 4, // ADD THIS - advance to return stage
     action: QuestStageAction.NONE,
     description: "Killing chickens (in progress)",
     objectives: [
@@ -116,6 +118,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
   [TUTORIAL_QUEST_STAGES.STAGE_STEP_5_COLLECT]: {
     stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_5_COLLECT,
     stepIndex: 5,
+    nextStepIndex: 6, // ADD THIS - advance to return stage
     action: QuestStageAction.NONE,
     description: "Collecting logs (in progress)",
     objectives: [
@@ -130,6 +133,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
   [TUTORIAL_QUEST_STAGES.STAGE_STEP_6_RETURN_LOGS]: {
     stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_6_RETURN_LOGS,
     stepIndex: 6,
+    // NO nextStepIndex - this is the final stage before completion
     action: QuestStageAction.COMPLETE_QUEST,
     description: "Return logs and complete quest",
     objectives: []
