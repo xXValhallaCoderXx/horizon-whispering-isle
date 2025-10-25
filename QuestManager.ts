@@ -596,6 +596,11 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       return "In progress...";
     }
 
+    // If there are no objectives (e.g., return/turn-in stage), show the stage description
+    if (!stageConfig.objectives || stageConfig.objectives.length === 0) {
+      return stageConfig.description || "Return to NPC";
+    }
+
     // Get first objective from current step
     const stageObj = stageConfig.objectives[0];
     const progress = questLog.objectives[stageObj.objectiveId];
