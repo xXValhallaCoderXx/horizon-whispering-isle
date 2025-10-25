@@ -1,6 +1,7 @@
 import { BaseWeapon } from 'BaseWeapon';
 import { Entity, Player, Vec3, LocalEvent, NetworkEvent } from 'horizon/core';
 import { QuestLog } from 'TutorialQuestDAO';
+import { TUTORIAL_QUEST_KEY } from 'TutorialQuestDAO';
 
 export const INVENTORY_STATE_KEY = `player:inventory_state`;
 
@@ -254,7 +255,7 @@ export interface Quest {
 
 // Baseline quest definitions; clone before use to avoid mutating these.
 export const QUEST_DEFINITIONS: Record<string, Quest> = {
-    tutorial_survival: {
+    [TUTORIAL_QUEST_KEY]: {
         questId: 'tutorial_survival',
         name: 'Island Survival Basics',
         description: 'Learn to gather resources on the island',

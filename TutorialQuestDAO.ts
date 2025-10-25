@@ -11,11 +11,19 @@ export interface QuestStepLog {
 }
 
 export interface QuestLog {
+  questId: string;
   status: "InProgress" | "Completed" | "NotStarted";
   steps: Record<string, QuestStepLog>;
   currentStepIndex: number;
   startedAt: number;
   completedAt: number;
+  objectives: Record<string, ObjectiveProgress>;
+}
+
+export interface ObjectiveProgress {
+  objectiveId: string;
+  currentCount: number;
+  isCompleted: boolean;
 }
 
 export enum TUTORIAL_QUEST_STAGES {
@@ -202,6 +210,8 @@ export class TutorialQuestDAO {
         currentStepIndex: 0,
         startedAt: 0,
         completedAt: 0,
+        objectives: {},
+        questId: ""
       };
     }
 
@@ -256,6 +266,8 @@ export class TutorialQuestDAO {
       currentStepIndex: 0,
       startedAt: 0,
       completedAt: 0,
+      objectives: {},
+      questId: ""
     };
   }
 
@@ -290,46 +302,45 @@ export class TutorialQuestDAO {
   public updateQuestObjective(
     questId: string,
     objectiveId: string,
-    have: number,
-    need: number,
-    done: boolean
+    currentCount: number, // Use currentCount
+    isCompleted: boolean  // Use isCompleted
   ): void {
     const state = this.getState();
-
-    // Initialize quest log if it doesn't exist
-    if (!state.questLogs[questId]) {
-      state.questLogs[questId] = {
-        status: "InProgress",
-        steps: {},
-        currentStepIndex: 0,
+    let questLog = state.questLogs[questId];
+    if (!questLog) {
+      console.warn(`[TutorialQuestDAO] Cannot update objective for non-existent quest: ${questId}. Initializing.`);
+      // Initialize quest if needed (ensure objectives map is created)
+      questLog = {
+        questId: questId, // Store the ID within the object too
+        status: "InProgress", // Assume starting if updating objective
+        objectives: {}, // Initialize objectives map
+        steps: {}, // Keep steps if still needed elsewhere, otherwise remove
+        currentStepIndex: 0, // Or determine appropriately
         startedAt: Date.now(),
         completedAt: 0,
       };
+      state.questLogs[questId] = questLog;
     }
 
-    const questLog = state.questLogs[questId];
+    // Ensure objectives map exists
+    if (!questLog.objectives) {
+      questLog.objectives = {};
+    }
 
-    // Auto-start if not started
+    questLog.objectives[objectiveId] = {
+      objectiveId,
+      currentCount, // Save currentCount
+      isCompleted   // Save isCompleted
+    };
+
     if (questLog.status === "NotStarted") {
       questLog.status = "InProgress";
       questLog.startedAt = Date.now();
     }
 
-    const newState: TutorialQuestDaoState = {
-      ...state,
-      questLogs: {
-        ...state.questLogs,
-        [questId]: {
-          ...questLog,
-          steps: {
-            ...questLog.steps,
-            [objectiveId]: { have, need, done }
-          }
-        }
-      }
-    };
 
-    this.saveState(newState);
+
+    this.saveState(state);
   }
 
   public completeQuest(questId: string): void {

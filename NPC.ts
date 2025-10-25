@@ -135,7 +135,7 @@ export class NPC extends hz.Component<typeof NPC> {
       case TUTORIAL_QUEST_STAGES.STAGE_NOT_STARTED: // Player was "NotStarted" and just accepted the quest
         // Player just accepted the quest
         console.log(`[NPC] Starting quest '${TUTORIAL_QUEST_KEY}' for ${player.name.get()}`);
-        tutorialDao.setActiveQuest(TUTORIAL_QUEST_KEY, 1);
+
         this.playQuestAcceptedSound(player);
 
         // FIRE the QuestStarted event so QuestManager can spawn bag, etc.
