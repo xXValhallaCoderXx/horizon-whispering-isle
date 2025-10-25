@@ -2,6 +2,7 @@ import * as hz from 'horizon/core';
 import { EventsService, PlayerState, PLAYER_INITIAL_STATE } from 'constants';
 import { TutorialQuestDAO } from 'TutorialQuestDAO';
 import { InventoryDAO } from 'InventoryDAO';
+import { PlayerStateDAO } from 'PlayerStateDAO';
 
 
 
@@ -13,14 +14,14 @@ export class PlayerStateService extends hz.Component<typeof PlayerStateService> 
 
   private inventoryDaos = new Map<hz.Player, InventoryDAO>();
   private tutorialDaos = new Map<hz.Player, TutorialQuestDAO>();
-  // private playerDaos = new Map<hz.Player, PlayerDao>();
+  private playerDaos = new Map<hz.Player, PlayerStateDAO>();
 
   start() {
     PlayerStateService.instance = this;
 
     this.connectCodeBlockEvent(this.entity, hz.CodeBlockEvents.OnPlayerEnterWorld, (player) => {
       this.tutorialDaos.set(player, new TutorialQuestDAO(player, this.world));
-      // this.playerDaos.set(player, new PlayerDao(player, this.world));
+      this.playerDaos.set(player, new PlayerStateDAO(player, this.world));
       this.inventoryDaos.set(player, new InventoryDAO(player, this.world));
       this.sendLocalBroadcastEvent(EventsService.PlayerEvents.OnPlayerStateLoaded, { player });
     });
@@ -28,7 +29,7 @@ export class PlayerStateService extends hz.Component<typeof PlayerStateService> 
     this.connectCodeBlockEvent(this.entity, hz.CodeBlockEvents.OnPlayerExitWorld, (player) => {
       this.inventoryDaos.delete(player);
       this.tutorialDaos.delete(player);
-      // this.playerDaos.delete(player);
+      this.playerDaos.delete(player);
     });
   }
 
@@ -37,9 +38,9 @@ export class PlayerStateService extends hz.Component<typeof PlayerStateService> 
     return this.tutorialDaos.get(player);
   }
 
-  // public getPlayerDAO(player: hz.Player): PlayerDao | undefined {
-  //   return this.playerDaos.get(player);
-  // }
+  public getPlayerDAO(player: hz.Player): PlayerStateDAO | undefined {
+    return this.playerDaos.get(player);
+  }
 
   public getInventoryDAO(player: hz.Player): InventoryDAO | undefined {
     return this.inventoryDaos.get(player);

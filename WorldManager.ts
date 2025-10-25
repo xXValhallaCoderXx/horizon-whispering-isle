@@ -29,6 +29,7 @@ class WorldManager extends Component<typeof WorldManager> {
   start() { }
 
   private playerEnterWorld = (player: Player) => {
+    console.log(`[WorldManager] Player ${player} entered world.`);
     this.currentActivePlayers.add(player);
     const welcomeSound = this.props.welcomeSound?.as(AudioGizmo);
     const options: AudioOptions = {
@@ -40,7 +41,6 @@ class WorldManager extends Component<typeof WorldManager> {
   }
 
   private async playerDataInitialized(player: Player) {
-    console.log(`[WorldManager] Player ${player.name.get()} data initialized.`);
     const tutorialDao = PlayerStateService.instance?.getTutorialDAO(player);
     const isTutorialComplete = tutorialDao?.getTutorialCompletionStatus();
     const inventoryDao = PlayerStateService.instance?.getInventoryDAO(player);
@@ -51,16 +51,7 @@ class WorldManager extends Component<typeof WorldManager> {
     if (isTutorialComplete) {
       this.teleportPlayer(player, this.props.mainIslandSpawnPoint);
     } else {
-      const isQuestActive = tutorialDao?.getActiveQuestId();
 
-
-      if (isQuestActive) {
-        console.log(`[WorldManager] Player ${player.name.get()} has a quest in progress - open Quest HUD: ${isQuestActive}`);
-        console.error("SENDING EVENT FOR PLAYER: ", player);
-        this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Welcome Back to the Tutorial!", questId: isQuestActive });
-
-
-      }
       this.teleportPlayer(player, this.props.tutorialIslandSpawnPoint);
     }
   }
@@ -92,7 +83,6 @@ class WorldManager extends Component<typeof WorldManager> {
     }
     const gizmo = spawnPoint.as(SpawnPointGizmo);
     if (gizmo) {
-      console.log(`[PlayerSpawnManager] Teleporting ${player.name.get()}.`);
       gizmo.teleportPlayer(player);
     } else {
       console.error(`[PlayerSpawnManager] entity is not a SpawnPointGizmo.`);

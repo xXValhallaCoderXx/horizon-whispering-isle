@@ -15,7 +15,7 @@ export class EventsService {
     static readonly QuestEvents = {
 
         QuestStarted: new LocalEvent<QuestPayload>(),
-        DisplayQuestHUD: new NetworkEvent<{ player: Player; questId: string; title: string }>("DisplayQuestHUD"),
+        DisplayQuestHUD: new NetworkEvent<{ player: Player; questId: string; title: string, visible: boolean }>("DisplayQuestHUD"),
 
         // NOT USED YET
         // Use NetworkEvent so client-side item scripts can notify the server QuestManager

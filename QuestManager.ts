@@ -17,7 +17,13 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   };
 
   preStart(): void {
-    // When tutorial quest is started, mark stage and spawn bag
+
+    this.connectCodeBlockEvent(
+      this.entity,
+      hz.CodeBlockEvents.OnPlayerEnterWorld,
+      (player: hz.Player) => this.onPlayerEnterWorld(player)
+    );
+
     this.connectLocalBroadcastEvent(
       EventsService.QuestEvents.QuestStarted,
       (payload: QuestPayload) => this.onQuestStarted(payload)
@@ -42,7 +48,23 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
   start() { }
 
-  // VERIFIED
+  /* NEW FUUNCTIONS WORKED ON MANUALLY */
+  private onPlayerEnterWorld = (player: hz.Player) => {
+    this.props.questHud?.owner.set(player);
+    console.log(`[QuestManager] Player ${player.id} entered world - Transfering Ownership.`);
+
+    const tutorialDao = PlayerStateService.instance?.getTutorialDAO(player);
+    const isQuestActive = tutorialDao?.getActiveQuestId();
+
+    console.log("IS QUESTACTIVE: ", isQuestActive)
+    if (isQuestActive) {
+      this.async.setTimeout(() => {
+        this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Welcome Back to the Tutorial!", questId: "tutorial_quest", visible: true, });
+      }, 1000);
+    }
+  }
+
+
   private async onQuestStarted(payload: QuestPayload) {
     console.log("BLAH")
 
@@ -72,17 +94,13 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       console.log(`[QuestManager] Storage bag marked as acquired for ${player.name.get()}`);
     }
 
-    this.sendNetworkBroadcastEvent(EventsService.QuestEvents.DisplayQuestHUD, { player, questId: questId, title: "Weeee" });
-
-    this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, {
-      player,
-      questId: questId,
-      stage: questLog.currentStepIndex.toString() // or map to TUTORIAL_QUEST_STAGES enum
-    });
+    this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Welcome Back to the Tutorial!", questId: "tutorial_quest", visible: true, });
     console.log(`[QuestManager] Quest started successfully for ${player.name.get()}`);
   }
 
-  // TODO BELOW
+
+
+  /* OLDER FUNCTIONS TO BE EXPLORED */
 
 
   private checkQuestCollectionSubmission(payload: QuestSubmitCollectProgress): boolean {

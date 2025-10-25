@@ -214,7 +214,7 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
             if (ready) {
                 if (this.props.attentionLoopEnabled) this.async.setTimeout(() => this.recomputeLoopActivity(), 50);
                 // Optional: log available animator parameters once on first start
-                try { const params = this.assetRef_?.getAnimationParameters?.(); params && console.log('NpcManager: Animator params', params); } catch { }
+                try { const params = this.assetRef_?.getAnimationParameters?.(); } catch { }
                 return;
             }
             if (attempts <= 0) {

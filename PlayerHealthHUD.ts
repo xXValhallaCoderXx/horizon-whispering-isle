@@ -1,9 +1,5 @@
-// Copyright (c) Meta Platforms, Inc. and affiliates.
-
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
-
-import { PropTypes, Color } from 'horizon/core'
+import { EventsService } from 'constants'
+import { PropTypes, Color, CodeBlockEvents, Player } from 'horizon/core'
 import {
   UIComponent,
   View,
@@ -16,8 +12,6 @@ import {
   ImageStyle,
   Binding,
   AnimatedBinding,
-  Animation,
-  Easing,
 } from 'horizon/ui'
 
 const HP_BAR_BG_COLOR = '#8B0000' // Dark Red (Damage)
@@ -28,23 +22,21 @@ export class PlayerHealthHUD extends UIComponent<typeof PlayerHealthHUD> {
     // --- Textures ---
     frameTexture: { type: PropTypes.Asset },
   }
-
-  // --- Bindings for Dynamic Data ---
-  /** AnimatedBinding for the health bar's fill percentage (0.0 to 1.0) */
   private hpFillBinding = new AnimatedBinding(1.0)
-  /** Binding for the health text (e.g., "100" or "80/100") */
   private hpTextBinding = new Binding('100')
-  /** Binding for the player's name */
   private playerNameBinding = new Binding('xXValhallaMonkXx')
-  /** Binding for visibility */
   private isVisibleBinding = new Binding<boolean>(true);
 
-  initializeUI(): UINode {
-    // This UI component will be spawned by a server script (like HudManager)
-    // and assigned to the player. It runs on the client.
+  start() {
+    this.connectCodeBlockEvent(
+      this.entity,
+      CodeBlockEvents.OnPlayerEnterWorld, this.onPlayerEnterWorld)
+  }
 
-    return UINode.if(this.isVisibleBinding,
-      View({
+  private onPlayerEnterWorld = (player: Player) => this.entity.owner.set(player)
+
+  initializeUI(): UINode {
+    return View({
         style: RootStyle,
         children: [
           // 1. The Frame (Background Image)
@@ -105,67 +97,10 @@ export class PlayerHealthHUD extends UIComponent<typeof PlayerHealthHUD> {
             ],
           }),
         ],
-      })
-    )
+    })
   }
 
-  /**
-  * Shows the Quest HUD.
-  */
-  public show() {
-    this.isVisibleBinding.set(true);
-  }
 
-  /**
-    * Hides the Quest HUD.
-    */
-  public hide() {
-    this.isVisibleBinding.set(false);
-  }
-
-  /**
-    * Sets the visibility of the Quest HUD.
-    * @param visible True to show, false to hide.
-    */
-  public setVisible(visible: boolean) {
-    this.isVisibleBinding.set(visible);
-  }
-
-  /**
-    * Sets The player's health display.
-    * @param health Current health value.
-    * @param maxHealth Maximum health value.
-    */
-  public updateHealth(health: number, maxHealth: number) {
-    // 1. Clamp values to be safe
-    const currentHealth = Math.max(0, health)
-    const totalHealth = Math.max(1, maxHealth) // Avoid division by zero
-    const healthPercent = currentHealth / totalHealth
-
-    // 2. Update the text binding
-    if (healthPercent >= 1) {
-      this.hpTextBinding.set(`${totalHealth}`)
-    } else {
-      this.hpTextBinding.set(`${currentHealth}/${totalHealth}`)
-    }
-
-    // 3. Update the animated fill binding
-    // This will create a smooth animation from its current value to the new percentage.
-    this.hpFillBinding.set(
-      Animation.timing(healthPercent, {
-        duration: 300, // 300ms animation duration
-        easing: Easing.out(Easing.cubic),
-      }),
-    )
-  }
-
-  /**
-    * Sets the player's name display.
-    * @param name The name of the player.
-    */
-  public setPlayerName(name: string) {
-    this.playerNameBinding.set(name)
-  }
 }
 UIComponent.register(PlayerHealthHUD)
 
