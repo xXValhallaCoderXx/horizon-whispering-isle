@@ -3,7 +3,7 @@ import { VARIABLE_GROUPS } from 'constants';
 import { PlayerState } from 'constants';
 import { EventsService, ISubmitQuestCollectProgress, QuestPayload, QUEST_DEFINITIONS, Quest, QuestObjective, ObjectiveType, QuestStatus, QuestProgressUpdatedPayload } from 'constants';
 import { PlayerStateService } from 'PlayerStateService';
-import { QuestLog } from 'TutorialQuestDAO';
+import { QuestLog, TUTORIAL_QUEST_KEY } from 'TutorialQuestDAO';
 
 
 class QuestManager extends hz.Component<typeof QuestManager> {
@@ -55,12 +55,19 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     console.log(`[QuestManager] Player ${player.id} entered world - Transfering Ownership.`);
 
     const tutorialDao = PlayerStateService.instance?.getTutorialDAO(player);
-    const isQuestActive = tutorialDao?.getActiveQuestId();
+    const activeQuestId = tutorialDao?.getActiveQuestId();
 
 
-    if (isQuestActive) {
+    if (activeQuestId) {
       this.async.setTimeout(() => {
-        this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Tutorial", questId: "tutorial_quest", visible: true, objective: "Collect 0/5 Coconuts." });
+        const objectiveText = this.getQuestObjectiveText(player, activeQuestId);
+        this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, {
+          player,
+          title: "Tutorial",
+          questId: activeQuestId,
+          visible: true,
+          objective: objectiveText
+        });
       }, 1500);
     }
   }
@@ -81,7 +88,9 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     if (!questDAO) {
       console.error('[QuestManager] Could not get quest DAO for player');
       return;
+
     }
+    questDAO.setActiveQuest(TUTORIAL_QUEST_KEY, 1);
     const questLog = questDAO.getQuestLog(questId);
     if (questLog.status !== 'InProgress') {
       console.warn(`[QuestManager] Quest ${questId} not in progress for ${player.name.get()}`);
@@ -95,7 +104,14 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       console.log(`[QuestManager] Storage bag marked as acquired for ${player.name.get()}`);
     }
 
-    this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Tutorial", questId: "tutorial_quest", visible: true, objective: "Collect 0/5 Coconuts." });
+    const objectiveText = this.getQuestObjectiveText(player, questId);
+    this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, {
+      player,
+      title: "Tutorial",
+      questId: questId,
+      visible: true,
+      objective: objectiveText
+    });
     console.log(`[QuestManager] Quest started successfully for ${player.name.get()}`);
   }
 
@@ -134,23 +150,24 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
 
     // --- 2. Get Static Quest Definition ---
-    const questDef = QUEST_DEFINITIONS[activeQuestId];
-    if (!questDef) {
-      console.error(`[QuestManager] Quest definition not found for quest ID: ${activeQuestId}`);
-      this.world.ui.showPopupForPlayer(player, "Error: Quest definition missing.", 3); // Native UI Popup
+    const stageConfig = questDAO.getStageByStepIndex(quest.currentStepIndex);
+    if (!stageConfig || !stageConfig.objectives) {
+      console.warn(`[QuestManager] No stage config found for step ${quest.currentStepIndex}`);
       return false;
     }
 
-    console.log("ACTIVE Quest DEF: ", questDef);
-
     // --- 3. Find Matching Objective Definitions ---
-    const matchingObjectiveDefs = questDef.objectives.filter(
-      (oDef) => oDef.type === ObjectiveType.Collect && oDef.targetType === itemId
+    const matchingObjectiveDef = stageConfig.objectives.find(
+      obj => obj.itemType === itemId
     );
+    if (!matchingObjectiveDef) {
+      console.log(`[QuestManager] Item '${itemId}' is not relevant for current quest step`);
+      return false;
+    }
 
-    console.log("MATCHING OBJECTIVES: ", matchingObjectiveDefs);
+    console.log("MATCHING OBJECTIVES: ", matchingObjectiveDef);
 
-    if (matchingObjectiveDefs.length === 0) {
+    if (!matchingObjectiveDef) {
       console.log(`[QuestManager] No matching *collect* objectives for item '${itemId}' in quest '${activeQuestId}'.`);
       // It's possible the item is for a different quest or not quest-related
       // Only show popup if maybe expected? For now, just log.
@@ -160,136 +177,153 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
 
     // --- 4. Process Progress ---
-    let progressedOverall = false;
-    const completedNowDefs: QuestObjective[] = []; // Store definitions for descriptions
+    const objectiveProgress = quest.objectives[matchingObjectiveDef.objectiveId];
 
-    for (const objDef of matchingObjectiveDefs) {
-      console.log("PROCESSING OBJECTIVE DEF: ", objDef);
-      console.log("QUEEEST: ", quest);
-      // Get LIVE progress state for this objective
-      const objectiveProgress = quest.objectives[objDef.objectiveId];
-      console.log("OBJECTIVE PROGRESS: ", objectiveProgress);
-      if (!objectiveProgress) {
-        console.error(`[QuestManager] Progress data missing for objective ${objDef.objectiveId} in quest ${quest.questId}. Initializing.`);
-        // Initialize if missing (shouldn't happen with proper quest start)
-        quest.objectives[objDef.objectiveId] = {
-          objectiveId: objDef.objectiveId,
-          currentCount: 0,
-          isCompleted: false,
+    if (!objectiveProgress) {
+      console.error(`[QuestManager] Progress data missing for objective ${matchingObjectiveDef.objectiveId}`);
+      return false;
+    }
 
-        };
-        // Re-assign for safety
-        const newObjectiveProgress = quest.objectives[objDef.objectiveId];
-        if (!newObjectiveProgress) {
-          console.error("Failed to initialize objective progress even after attempting.");
-          continue; // Skip this objective if initialization failed
-        }
-      }
-      console.log("UPDATED OBJECTIVE PROGRESS: ", objectiveProgress);
-      // Check if already completed
-      if (objectiveProgress.isCompleted) {
-        continue; // Skip already completed objectives
+    if (objectiveProgress.isCompleted) {
+      console.log(`[QuestManager] Objective already completed`);
+      return false;
+    }
+
+    // Calculate new count
+    const before = objectiveProgress.currentCount;
+    const after = Math.min(matchingObjectiveDef.targetCount, before + amount);
+
+    if (after > before) {
+      objectiveProgress.currentCount = after;
+      console.log(`[QuestManager] Objective progress '${matchingObjectiveDef.objectiveId}': ${after}/${matchingObjectiveDef.targetCount}`);
+
+      const wasCompleted = after >= matchingObjectiveDef.targetCount;
+      if (wasCompleted) {
+        objectiveProgress.isCompleted = true;
+        console.log(`[QuestManager] Objective completed: ${matchingObjectiveDef.objectiveId}`);
       }
 
-      // Calculate new count
-      const before = objectiveProgress.currentCount;
-      const after = Math.min(objDef.targetCount, before + amount);
+      // Save progress
+      questDAO.updateQuestObjective(
+        quest.questId,
+        matchingObjectiveDef.objectiveId,
+        objectiveProgress.currentCount,
+        objectiveProgress.isCompleted
+      );
 
-      if (after > before) {
-        objectiveProgress.currentCount = after; // MUTATE live quest object
-        progressedOverall = true;
-        console.log(`[QuestManager] Objective progress '${objDef.objectiveId}': ${after}/${objDef.targetCount}`);
+      // Update HUD with simple format
+      const objectiveText = this.getQuestObjectiveText(player, activeQuestId);
+      this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, {
+        player,
+        title: "Tutorial",
+        questId: activeQuestId,
+        visible: true,
+        objective: objectiveText
+      });
 
-        if (after >= objDef.targetCount) {
-          objectiveProgress.isCompleted = true; // MUTATE live quest object
-          completedNowDefs.push(objDef); // Add definition for notification text
-          console.log(`[QuestManager] Objective completed: ${objDef.objectiveId}`);
-        }
+      // --- 5. Handle Objective Completion ---
+      if (wasCompleted) {
+        // Play sound and VFX
+        this.playCollectionSoundForPlayer(player, entityId);
+        this.playCollectionVfxForPlayer(player, entityId);
 
-        questDAO.updateQuestObjective(
-          quest.questId, // Pass questId
-          objDef.objectiveId, // Pass objectiveId
-          objectiveProgress.currentCount, // Pass updated count
-          objectiveProgress.isCompleted // Pass updated completion status
+        // Show completion popup
+        this.world.ui.showPopupForPlayer(
+          player,
+          `✓ ${matchingObjectiveDef.description}`,
+          3
         );
+
+        // Check if all objectives in current stage are complete
+        const allStageObjectivesComplete = stageConfig.objectives.every(
+          obj => quest.objectives[obj.objectiveId]?.isCompleted
+        );
+
+        if (allStageObjectivesComplete) {
+          console.log(`[QuestManager] All objectives complete for step ${quest.currentStepIndex}`);
+
+          // Advance to next step after a brief delay
+          this.async.setTimeout(() => {
+            this.advanceQuestStep(player, activeQuestId);
+          }, 1500);
+        }
       }
-    } // End loop through matching objectives
+      return true;
+    }
+    return false;
+  }
 
+  private advanceQuestStep(player: hz.Player, questId: string): void {
+    const questDAO = PlayerStateService.instance?.getTutorialDAO(player);
+    if (!questDAO) {
+      console.error(`[QuestManager] Could not get TutorialDAO for advancing quest`);
+      return;
+    }
 
-    // --- 5. Handle Results of Progress ---
-    // if (progressedOverall) {
-    //     console.log("Playing SFX/VFX and handling post-progress actions.");
-    //     // SFX/VFX
-    //     this.playCollectionSoundForPlayer(player, entityId);
-    //     this.playCollectionVfxForPlayer(player, entityId);
+    const quest = questDAO.getQuestLog(questId);
+    if (!quest) {
+      console.error(`[QuestManager] Could not find quest log for ${questId}`);
+      return;
+    }
 
-    //     // Notify player about completed objectives
-    //     if (completedNowDefs.length > 0) {
-    //       console.log(`Notifying player about completed objectives: ${completedNowDefs.map(def => def.objectiveId).join(', ')}`);
-    //       this.notifyObjectiveCompletion(player, quest, completedNowDefs);
-    //        // console.error("notifyObjectiveCompletion not called - needs refactoring"); // Keep if notify func needs work
-    //     }
+    const currentStageConfig = questDAO.getStageByStepIndex(quest.currentStepIndex);
+    if (!currentStageConfig) {
+      console.error(`[QuestManager] Could not find stage config for step ${quest.currentStepIndex}`);
+      return;
+    }
 
-    //     // Destroy the collected item entity
-    //     if (entityId != null) {
-    //        console.log(`Destroying collected entity: ${entityId}`);
-    //       this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
-    //     }
+    // Check if there's a next step
+    if (!currentStageConfig.nextStepIndex) {
+      console.log(`[QuestManager] No next step defined, quest complete`);
+      questDAO.completeQuest(questId);
 
-    //     // Emit progress update for UI/Dialogues
-    //     console.log("Emitting QuestProgressUpdated event.");
-    //     this.emitQuestProgressUpdated(player, quest); // Pass the mutated quest object
+      // Show final completion message
+      this.world.ui.showPopupForPlayer(player, "Quest Complete!", 5);
 
-    //     // --- Check for Quest Completion ---
-    //     const allObjectivesCompleted = questDef.objectives.every(
-    //       (oDef) => quest.objectives[oDef.objectiveId]?.isCompleted // Check mutated quest object
-    //     );
-    //     console.log(`Checking quest completion. All objectives completed: ${allObjectivesCompleted}`);
+      // Hide or update HUD
+      this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, {
+        player,
+        title: "Tutorial",
+        questId: questId,
+        visible: false,
+        objective: ""
+      });
 
+      return;
+    }
 
-    //     if (allObjectivesCompleted) {
-    //       // Only update status if not already completed
-    //       if (quest.status !== QuestStatus.Completed) {
-    //           quest.status = QuestStatus.Completed;
-    //           console.log(`Quest completed: ${quest.questId}. Updating status.`);
+    const nextStepIndex = currentStageConfig.nextStepIndex;
+    console.log(`[QuestManager] Advancing quest from step ${quest.currentStepIndex} to ${nextStepIndex}`);
 
-    //           // --- SAVE COMPLETION STATUS via DAO ---
-    //           questDAO.completeQuest(quest.questId); // Use the dedicated DAO function
-    //           console.log(`Saved quest completion status via DAO.`);
-    //           // ------------------------------------
+    // Update the quest step
+    questDAO.updateQuestStep(questId, nextStepIndex);
 
-    //           // Notify other systems
-    //           console.log("Sending QuestCompleted local event.");
-    //           this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestCompleted, { player, questId: quest.questId });
+    // Get the refreshed quest log
+    const updatedQuest = questDAO.getQuestLog(questId);
 
-    //           // Update UI/Dialogues one last time
-    //           console.log("Emitting final QuestProgressUpdated event for completion.");
-    //           this.emitQuestProgressUpdated(player, quest);
+    // Get new stage config
+    const newStageConfig = questDAO.getStageByStepIndex(nextStepIndex);
 
-    //           // Show popup
-    //            console.log("Showing quest completion popup.");
-    //           this.world.ui.showPopupForPlayer(player, `Quest Complete: ${questDef.title}!`, 5);
-    //            // TODO: Handle quest rewards, next quest logic, etc.
-    //        } else {
-    //            console.log(`Quest ${quest.questId} was already marked as completed.`);
-    //        }
+    if (newStageConfig) {
+      console.log(`[QuestManager] New stage: ${newStageConfig.description}`);
 
-    //     } else {
-    //       // Quest still in progress
-    //       // Ensure status is correct if somehow changed, though it shouldn't have
-    //       if (quest.status !== QuestStatus.InProgress) {
-    //           console.warn(`Quest ${quest.questId} status was not InProgress after objective updates. Setting back.`);
-    //           quest.status = QuestStatus.InProgress;
-    //           // Optionally save this status change if it happened, though it's likely an anomaly
-    //           // questDAO.updateQuestStatus(quest.questId, QuestStatus.InProgress); // Assumes such a function exists or modify saveState
-    //       }
-    //     }
-    //     return true; // Progress was made
-    //   } else {
-    //        console.log(`No overall progress made for item ${itemId}.`);
-    //        return false; // No progress was made overall
-    //   }
+      // Show stage transition message
+      this.world.ui.showPopupForPlayer(
+        player,
+        newStageConfig.description,
+        4
+      );
 
+      // Update HUD with new objective
+      const objectiveText = this.getQuestObjectiveText(player, questId);
+      this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, {
+        player,
+        title: "Tutorial",
+        questId: questId,
+        visible: true,
+        objective: objectiveText
+      });
+    }
   }
 
   private emitQuestProgressUpdated(player: hz.Player, quest: Quest) { // Pass the LIVE quest object
@@ -540,7 +574,37 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     return null
   }
 
+  // TODO - IMPROVE THIS
+  private getQuestObjectiveText(player: hz.Player, questId: string): string {
+    const questDAO = PlayerStateService.instance?.getTutorialDAO(player);
+    if (!questDAO) {
+      return "Loading...";
+    }
 
+    const questLog = questDAO.getQuestLog(questId);
+    if (!questLog || questLog.status === 'NotStarted') {
+      return "Quest not started";
+    }
+
+    if (questLog.status === 'Completed') {
+      return "Quest Complete!";
+    }
+
+    // Get the current step configuration
+    const stageConfig = questDAO.getStageByStepIndex(questLog.currentStepIndex);
+    if (!stageConfig || !stageConfig.objectives || stageConfig.objectives.length === 0) {
+      return "In progress...";
+    }
+
+    // Get first objective from current step
+    const stageObj = stageConfig.objectives[0];
+    const progress = questLog.objectives[stageObj.objectiveId];
+    const current = progress?.currentCount || 0;
+    const target = stageObj.targetCount;
+
+    // Simple format: "coconut 1/2"
+    return `${stageObj.itemType} ${current}/${target}`;
+  }
 
 
 

@@ -201,17 +201,35 @@ export class TutorialQuestDAO {
 
   public setActiveQuest(questId: string, currentStepIndex: number = 0): void {
     const state = this.getState();
+    console.log(`[TutorialQuestDAO] Setting active quest to '${questId}' at step index ${currentStepIndex}`);
 
     // Initialize quest log if it doesn't exist
     if (!state.questLogs[questId]) {
+      console.log(`[TutorialQuestDAO] Initializing quest log for questId '${questId}'`);
+
+      // Get the stage configuration for the current step
+      const stageConfig = this.getStageByStepIndex(currentStepIndex);
+
+      // Initialize objectives based on the stage configuration
+      const initialObjectives: Record<string, ObjectiveProgress> = {};
+      if (stageConfig && stageConfig.objectives) {
+        for (const stageObj of stageConfig.objectives) {
+          initialObjectives[stageObj.objectiveId] = {
+            objectiveId: stageObj.objectiveId,
+            currentCount: 0,
+            isCompleted: false
+          };
+        }
+      }
+
       state.questLogs[questId] = {
+        questId: questId,  // Set the questId properly
         status: "NotStarted",
         steps: {},
         currentStepIndex: 0,
         startedAt: 0,
         completedAt: 0,
-        objectives: {},
-        questId: ""
+        objectives: initialObjectives  // Initialize with stage objectives
       };
     }
 
@@ -220,6 +238,22 @@ export class TutorialQuestDAO {
       state.questLogs[questId].status = "InProgress";
       state.questLogs[questId].startedAt = Date.now();
       state.questLogs[questId].currentStepIndex = currentStepIndex;
+
+      // If we're starting at a step other than 0, ensure objectives are initialized
+      if (currentStepIndex > 0) {
+        const stageConfig = this.getStageByStepIndex(currentStepIndex);
+        if (stageConfig && stageConfig.objectives) {
+          for (const stageObj of stageConfig.objectives) {
+            if (!state.questLogs[questId].objectives[stageObj.objectiveId]) {
+              state.questLogs[questId].objectives[stageObj.objectiveId] = {
+                objectiveId: stageObj.objectiveId,
+                currentCount: 0,
+                isCompleted: false
+              };
+            }
+          }
+        }
+      }
     }
 
     const newState: TutorialQuestDaoState = {
@@ -285,18 +319,41 @@ export class TutorialQuestDAO {
       return;
     }
 
+  console.log(`[TutorialQuestDAO] Updating quest ${questId} to step ${stepIndex}`);
+
+  // Get the new stage configuration
+  const stageConfig = this.getStageByStepIndex(stepIndex);
+
+  // Initialize objectives for the new step
+  if (stageConfig && stageConfig.objectives) {
+    for (const stageObj of stageConfig.objectives) {
+      // Only initialize if not already present
+      if (!state.questLogs[questId].objectives[stageObj.objectiveId]) {
+        state.questLogs[questId].objectives[stageObj.objectiveId] = {
+          objectiveId: stageObj.objectiveId,
+          currentCount: 0,
+          isCompleted: false
+        };
+        console.log(`[TutorialQuestDAO] Initialized objective: ${stageObj.objectiveId}`);
+      }
+    }
+  }
+
+  // Update the step index
+  state.questLogs[questId].currentStepIndex = stepIndex;
+
     const newState: TutorialQuestDaoState = {
       ...state,
       questLogs: {
         ...state.questLogs,
         [questId]: {
-          ...state.questLogs[questId],
-          currentStepIndex: stepIndex
+          ...state.questLogs[questId]
         }
       }
     };
 
     this.saveState(newState);
+  console.log(`[TutorialQuestDAO] Quest step updated to ${stepIndex}`);
   }
 
   public updateQuestObjective(
