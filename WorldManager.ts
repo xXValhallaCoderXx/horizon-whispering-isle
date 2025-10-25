@@ -53,6 +53,9 @@ class WorldManager extends Component<typeof WorldManager> {
     } else {
       const questId = tutorialDao?.getActiveQuestId();
       const currentQuestIndex = tutorialDao?.getQuestStep(questId || "") || 0;
+      if (currentQuestIndex >= 3) {
+        // Spawn Axe for user
+      }
       console.error("CURRENT QUEST INDEX: ", currentQuestIndex)
       this.teleportPlayer(player, this.props.tutorialIslandSpawnPoint);
     }
