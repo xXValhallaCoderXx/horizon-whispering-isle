@@ -18,6 +18,9 @@ export const DamageEvent = new LocalEvent<{ amount: number }>();
 export class BaseWeapon extends Component<typeof BaseWeapon> {
   static propsDefinition = {
     isDroppable: { type: PropTypes.Boolean, default: false },
+    damage: { type: PropTypes.Number, default: 25 },
+    reach: { type: PropTypes.Number, default: 2.0 },
+    weight: { type: PropTypes.Number, default: 5 },
   };
   private owner: Player | null = null;
 
@@ -97,15 +100,13 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
       .get()
       .playAvatarGripPoseAnimationByName(AvatarGripPoseAnimationNames.Fire);
 
-
-
     this.sendNetworkBroadcastEvent(EventsService.CombatEvents.AttackSwingEvent, {
       owner: player,
       weapon: this.entity,
-      damage: 25,
-      reach: 2.0,
-      durationMs: 250,
-    }); 
+      damage: this.props.damage, // Was 25
+      reach: this.props.reach, // Was 2.0
+      durationMs: 250, // Was 250
+    });
   }
 
   // ** ADD THIS: Pass input to components **
