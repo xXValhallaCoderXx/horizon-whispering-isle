@@ -53,9 +53,11 @@ class WorldManager extends Component<typeof WorldManager> {
     } else {
       const isQuestActive = tutorialDao?.getActiveQuestId();
 
+
       if (isQuestActive) {
         console.log(`[WorldManager] Player ${player.name.get()} has a quest in progress - open Quest HUD: ${isQuestActive}`);
-        this.sendNetworkBroadcastEvent(EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Welcome Back to the Tutorial!", questId: isQuestActive });
+        console.error("SENDING EVENT FOR PLAYER: ", player);
+        this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Welcome Back to the Tutorial!", questId: isQuestActive });
 
 
       }

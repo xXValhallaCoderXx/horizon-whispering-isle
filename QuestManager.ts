@@ -3,7 +3,7 @@ import { VARIABLE_GROUPS } from 'constants';
 import { PlayerState } from 'constants';
 import { EventsService, QuestSubmitCollectProgress, QuestPayload, QUEST_DEFINITIONS, Quest, QuestObjective, ObjectiveType, QuestStatus, QuestProgressUpdatedPayload } from 'constants';
 import { PlayerStateService } from 'PlayerStateService';
-import { QuestHUD } from 'QuestHUD';
+
 
 class QuestManager extends hz.Component<typeof QuestManager> {
   static propsDefinition = {
