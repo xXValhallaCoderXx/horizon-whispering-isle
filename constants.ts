@@ -15,12 +15,15 @@ export class EventsService {
 
     static readonly QuestEvents = {
 
-        QuestStarted: new LocalEvent<QuestPayload>(),
-        DisplayQuestHUD: new NetworkEvent<{ player: Player; questId: string; title: string, visible: boolean, objective: string }>("DisplayQuestHUD"),
+        QuestStarted: new LocalEvent<IQuestStarted>(), // Listen for when a new quest is started (Tutorial quest)
+        DisplayQuestHUD: new NetworkEvent<IDisplayQuestHUD>("DisplayQuestHUD"), // Initiate showing the Quest HUD for a player
+        SubmitQuestCollectProgress: new NetworkEvent<ISubmitQuestCollectProgress>("SubmitQuestCollectProgress"), // When collecting an item - submit to check quest submission.
+
+
 
         // NOT USED YET
         // Use NetworkEvent so client-side item scripts can notify the server QuestManager
-        SubmitQuestCollectProgress: new NetworkEvent<{ player: Player; itemId: string; amount: number; entityId?: string }>("SubmitQuestCollectProgress"),
+
         CheckPlayerQuestSubmission: new LocalEvent<CheckQuestSubmissionPayload>(),
 
         QuestCompleted: new LocalEvent<QuestPayload>(),
@@ -119,10 +122,7 @@ export type PlayerInitialState = {
     player: Player;
 }
 
-export type QuestPayload = {
-    player: Player;
-    questId: string;
-};
+
 export type CheckQuestSubmissionPayload = {
     player: Player;
 
@@ -136,7 +136,10 @@ export type QuestProgressUpdatedPayload = {
     stage: string; // e.g., 'NotStarted' | 'Collecting' | 'ReturnToNPC' | 'Hunting' | 'Complete'
     quest?: Quest; // optional snapshot of quest state
 };
-
+export type QuestPayload = {
+    player: Player;
+    questId: string;
+};
 
 export interface IWeaponComp {
     parentWeapon: BaseWeapon;
@@ -339,4 +342,27 @@ export const PLAYER_INITIAL_STATE: PlayerState = {
             itemIds: [],
         },
     },
+};
+
+
+/* NEW TYPES */
+
+
+
+export type IQuestStarted = {
+    player: Player;
+    questId: string;
+};
+
+export type IDisplayQuestHUD = {
+
+
+
+
+
+    player: Player; questId: string; title: string, visible: boolean, objective: string
+};
+
+export type ISubmitQuestCollectProgress = {
+    player: Player; itemId: string; amount: number; entityId?: string
 };

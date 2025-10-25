@@ -3,7 +3,6 @@ import { EventsService } from "constants";
 
 class CollectableQuestItem extends hz.Component<typeof CollectableQuestItem> {
   static propsDefinition = {
-    // Optional override; defaults to 'coconut' if blank/undefined
     itemId: { type: hz.PropTypes.String, default: 'coconut' },
   };
 
@@ -28,6 +27,11 @@ class CollectableQuestItem extends hz.Component<typeof CollectableQuestItem> {
       : 'coconut';
     const rawId: any = (this.entity as any)?.id;
     const entityId = typeof rawId === 'bigint' ? rawId.toString() : String(rawId);
+
+    if (!entityId || !player) {
+      console.warn(`[CollectableQuestItem] - Invalid entityId or player. Aborting.`);
+      return;
+    }
     this.sendNetworkBroadcastEvent(EventsService.QuestEvents.SubmitQuestCollectProgress, {
       player,
       itemId: id,

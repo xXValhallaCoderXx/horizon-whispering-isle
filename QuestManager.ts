@@ -60,7 +60,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     if (isQuestActive) {
       this.async.setTimeout(() => {
         this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Tutorial", questId: "tutorial_quest", visible: true, objective: "Collect 0/5 Coconuts." });
-      }, 1000);
+      }, 1500);
     }
   }
 
