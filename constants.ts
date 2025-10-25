@@ -10,12 +10,13 @@ export class EventsService {
 
     static readonly PlayerEvents = {
         OnPlayerStateLoaded: new LocalEvent<{ player: Player }>('player.on_player_state_loaded'),
+        DisplayHealthHUD: new NetworkEvent<{ player: Player; currentHealth: number; maxHealth: number; name: string }>('player.display_health_hud'),
     }
 
     static readonly QuestEvents = {
 
         QuestStarted: new LocalEvent<QuestPayload>(),
-        DisplayQuestHUD: new NetworkEvent<{ player: Player; questId: string; title: string, visible: boolean }>("DisplayQuestHUD"),
+        DisplayQuestHUD: new NetworkEvent<{ player: Player; questId: string; title: string, visible: boolean, objective: string }>("DisplayQuestHUD"),
 
         // NOT USED YET
         // Use NetworkEvent so client-side item scripts can notify the server QuestManager

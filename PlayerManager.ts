@@ -11,39 +11,31 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
     playerHPGizmo: { type: hz.PropTypes.Entity },
   };
 
-
-  private hud: PlayerHealthHUD | null = null;
-
   preStart(): void {
+
+
 
     this.connectCodeBlockEvent(
       this.entity,
-      hz.CodeBlockEvents.OnPlayerEnterWorld, this.attachPlayerHUD)
-
-
+      hz.CodeBlockEvents.OnPlayerEnterWorld,
+      (player: hz.Player) => this.onPlayerEnterWorld(player)
+    );
   }
 
-  start() {
+  start() { }
 
-    // MODIFIED: Initialize HUD from this.entity
+  private onPlayerEnterWorld(player: hz.Player) {
 
-
-    // this.hud?.setPlayerName("Unknown");
-    // this.hud?.updateHealth(100, 100);
-    // this.hud?.show();
-
-  }
-
-  private attachPlayerHUD(player: hz.Player) {
-
+    console.log(`[PlayerManager] Player ${player.id} entered world - Transfering Ownership.`);
+    this?.props?.playerHPGizmo?.owner.set(player);
     const playerDao = PlayerStateService.instance?.getPlayerDAO(player);
-    const state = playerDao?.getState();
+    const playerState = playerDao?.getState();
 
-
-    console.error(`[PlayerManager] CHECK WHAT IS THIS: `);
+    const playerMaxHealth = playerState?.health
+    const playerName = player?.name.get() || "Unknown";
+    this.async.setTimeout(() => {
+      this.sendNetworkEvent(player, EventsService.PlayerEvents.DisplayHealthHUD, { player, currentHealth: playerMaxHealth ?? 100, maxHealth: playerMaxHealth ?? 100, name: playerName });
+    }, 1000);
   }
-
-
-
 }
 hz.Component.register(PlayerManager);

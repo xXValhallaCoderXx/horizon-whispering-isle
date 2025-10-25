@@ -11,6 +11,8 @@ import {
   TextStyle,
   ImageStyle,
   Binding,
+  Animation,
+  Easing,
   AnimatedBinding,
 } from 'horizon/ui'
 
@@ -23,17 +25,13 @@ export class PlayerHealthHUD extends UIComponent<typeof PlayerHealthHUD> {
     frameTexture: { type: PropTypes.Asset },
   }
   private hpFillBinding = new AnimatedBinding(1.0)
-  private hpTextBinding = new Binding('100')
-  private playerNameBinding = new Binding('xXValhallaMonkXx')
-  private isVisibleBinding = new Binding<boolean>(true);
+  private hpTextBinding = new Binding('0')
+  private playerNameBinding = new Binding('')
+  private isVisibleBinding = new Binding<boolean>(false);
 
-  start() {
-    this.connectCodeBlockEvent(
-      this.entity,
-      CodeBlockEvents.OnPlayerEnterWorld, this.onPlayerEnterWorld)
-  }
 
-  private onPlayerEnterWorld = (player: Player) => this.entity.owner.set(player)
+
+
 
   initializeUI(): UINode {
     return View({
@@ -100,6 +98,75 @@ export class PlayerHealthHUD extends UIComponent<typeof PlayerHealthHUD> {
     })
   }
 
+  start() {
+    this.connectNetworkEvent(this.entity.owner.get(), EventsService.PlayerEvents.DisplayHealthHUD,
+      (data: { player: Player, currentHealth: number, maxHealth: number, visible: boolean, name: string }) => {
+        const localPlayer = this.world.getLocalPlayer();
+        if (localPlayer && this.entity.owner.get() === localPlayer) {
+          this.setPlayerName(data?.name)
+          this.updateHealth(data.currentHealth, data.maxHealth);
+          this.setVisible(true);
+        }
+      });
+  }
+
+  /**
+ * Shows the Quest HUD.
+ */
+  private show() {
+    this.isVisibleBinding.set(true);
+  }
+
+  /**
+    * Hides the Quest HUD.
+    */
+  private hide() {
+    this.isVisibleBinding.set(false);
+  }
+
+  /**
+    * Sets the visibility of the Quest HUD.
+    * @param visible True to show, false to hide.
+    */
+  private setVisible(visible: boolean) {
+    this.isVisibleBinding.set(visible);
+  }
+
+  /**
+    * Sets The player's health display.
+    * @param health Current health value.
+    * @param maxHealth Maximum health value.
+    */
+  private updateHealth(health: number, maxHealth: number) {
+    // 1. Clamp values to be safe
+    const currentHealth = Math.max(0, health)
+    const totalHealth = Math.max(1, maxHealth) // Avoid division by zero
+    const healthPercent = currentHealth / totalHealth
+
+    // 2. Update the text binding
+    if (healthPercent >= 1) {
+      this.hpTextBinding.set(`${totalHealth}`)
+    } else {
+      this.hpTextBinding.set(`${currentHealth}/${totalHealth}`)
+    }
+
+    // 3. Update the animated fill binding
+    // This will create a smooth animation from its current value to the new percentage.
+    this.hpFillBinding.set(
+      Animation.timing(healthPercent, {
+        duration: 300, // 300ms animation duration
+        easing: Easing.out(Easing.cubic),
+      }),
+    )
+  }
+
+  /**
+    * Sets the player's name display.
+    * @param name The name of the player.
+    */
+  private setPlayerName(name: string) {
+    this.playerNameBinding.set(name)
+  }
 
 }
 UIComponent.register(PlayerHealthHUD)

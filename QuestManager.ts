@@ -56,10 +56,10 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     const tutorialDao = PlayerStateService.instance?.getTutorialDAO(player);
     const isQuestActive = tutorialDao?.getActiveQuestId();
 
-    console.log("IS QUESTACTIVE: ", isQuestActive)
+
     if (isQuestActive) {
       this.async.setTimeout(() => {
-        this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Welcome Back to the Tutorial!", questId: "tutorial_quest", visible: true, });
+        this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Tutorial", questId: "tutorial_quest", visible: true, objective: "Collect 0/5 Coconuts." });
       }, 1000);
     }
   }
@@ -94,7 +94,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       console.log(`[QuestManager] Storage bag marked as acquired for ${player.name.get()}`);
     }
 
-    this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Welcome Back to the Tutorial!", questId: "tutorial_quest", visible: true, });
+    this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, { player, title: "Tutorial", questId: "tutorial_quest", visible: true, objective: "Collect 0/5 Coconuts." });
     console.log(`[QuestManager] Quest started successfully for ${player.name.get()}`);
   }
 

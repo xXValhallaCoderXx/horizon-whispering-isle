@@ -20,6 +20,7 @@ class PlayerQuestHUD extends UIComponent {
 
   private titleTextBinding = new Binding<string>("");
   private isVisibleBinding = new Binding<boolean>(false); // This controls visibility
+  private objectiveTextBinding = new Binding<string>("");
 
 
   initializeUI() {
@@ -41,6 +42,10 @@ class PlayerQuestHUD extends UIComponent {
               text: this.titleTextBinding,
               style: TitleTextStyle,
             }),
+            Text({ // <-- ADDED
+              text: this.objectiveTextBinding,
+              style: ObjectiveTextStyle,
+            })
           ],
         }),
       ],
@@ -49,21 +54,21 @@ class PlayerQuestHUD extends UIComponent {
   }
 
   start() {
-    const owningPlayer = this.entity.owner.get();
-    if (owningPlayer === this.world.getServerPlayer()) {
-      console.warn("[PlayerQuestHUD] Script is running on server; aborting network event connection.");
-      // If still running on the server
-      return;
-    }
+
     // 2. Connect the network listener directly to the owning player
-    this.connectNetworkEvent(owningPlayer, EventsService.QuestEvents.DisplayQuestHUD, (payload) => {
-      const { title, visible } = payload;
-      this.updateUIBindings(title, visible);
+    this.connectNetworkEvent(this.entity.owner.get(), EventsService.QuestEvents.DisplayQuestHUD, (payload) => {
+      const localPlayer = this.world.getLocalPlayer();
+      if (localPlayer && this.entity.owner.get() === localPlayer) {
+        const { title, visible, objective } = payload;
+        this.updateUIBindings(title, objective, visible);
+      }
+
     });
   }
 
-  private updateUIBindings(title: string, visible: boolean): void {
+  private updateUIBindings(title: string, objective: string, visible: boolean): void {
     this.titleTextBinding.set(title);
+    this.objectiveTextBinding.set(objective);
     this.isVisibleBinding.set(visible);
 
   }
@@ -100,11 +105,22 @@ const ContentContainerStyle: ViewStyle = {
 
 // Style for the quest title
 const TitleTextStyle: TextStyle = {
-  marginTop: 80,
-  width: "100%",
-  fontSize: 16,
-  color: "gray",
-  textAlign: "center",
-  textAlignVertical: "top",
-  fontWeight: "bold",
-};
+  marginTop: 70, // <-- REDUCED (was 80) to make more room
+  width: '90%', // Added width to ensure centering and wrapping
+  fontSize: 14, // <-- REDUCED (was 16)
+  color: '#4a4a4a', // Used a specific dark gray instead of 'gray'
+  textAlign: 'center',
+  textAlignVertical: 'top',
+  fontWeight: 'bold',
+}
+
+
+// Style for the objective text
+const ObjectiveTextStyle: TextStyle = { // <-- ADDED
+  marginTop: 8, // Adds a small space below the title
+  width: '90%', // Keeps text within the scroll bounds
+  fontSize: 12, // Smaller than the title
+  color: '#5c5c5c', // Dark gray
+  textAlign: 'center',
+  textAlignVertical: 'top',
+}
