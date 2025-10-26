@@ -4,6 +4,10 @@ import { EventsService } from "constants";
 import { BaseNPC, BaseNPCEmote } from "./BaseNPC";
 import { Animation, Easing } from 'horizon/ui';
 
+interface BoundingBox {
+  min: hz.Vec3;
+  max: hz.Vec3;
+}
 
 enum EnemyNPCState {
   Idle,
@@ -24,6 +28,8 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     ...BaseNPC.propsDefinition,
     // Behavior
     isAggressive: { type: hz.PropTypes.Boolean, default: true },
+    isRoaming: { type: hz.PropTypes.Boolean, default: false },
+
     // Vision & Range
     maxVisionDistance: { type: hz.PropTypes.Number, default: 10 },
     maxAttackDistance: { type: hz.PropTypes.Number, default: 2.5 },
@@ -36,6 +42,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     // Movement (inherits walkSpeed and runSpeed from BaseNPC)
     chaseSpeed: { type: hz.PropTypes.Number, default: 3.0 },
     returnSpeed: { type: hz.PropTypes.Number, default: 2.0 },
+    roamSpeed: { type: hz.PropTypes.Number, default: 1.0 },
 
     // Animation Durations
     tauntDuration: { type: hz.PropTypes.Number, default: 2.8 },
@@ -47,6 +54,12 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     knockbackForce: { type: hz.PropTypes.Number, default: 5 },
     knockbackDuration: { type: hz.PropTypes.Number, default: 0.5 },
 
+    // Roaming Settings
+    navMeshVolume: { type: hz.PropTypes.Entity },
+    minIdleTime: { type: hz.PropTypes.Number, default: 2 },
+    maxIdleTime: { type: hz.PropTypes.Number, default: 5 },
+    roamRadius: { type: hz.PropTypes.Number, default: 10 },
+
     // References
     trigger: { type: hz.PropTypes.Entity },
     hitbox: { type: hz.PropTypes.Entity },
@@ -55,12 +68,10 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     deathVfx: { type: hz.PropTypes.Entity }
   };
 
-
   // Audio/Visual
   hitSfx?: hz.AudioGizmo;
   deathSfx?: hz.AudioGizmo;
   deathVfx?: hz.ParticleGizmo;
-
 
   // Combat State
   currentHitPoints: number = 100;
@@ -77,6 +88,12 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   startLocation!: hz.Vec3;
   aggroLocation?: hz.Vec3;
 
+  // Roaming State
+  private boundingBox?: BoundingBox;
+  private newDestinationTimer: number = 0;
+  private isIdling: boolean = false;
+  private destinationAttempts: number = 0;
+
   // Weapon Detection
   private activeSwings: Set<string> = new Set();
   private lastSwingData: {
@@ -92,14 +109,13 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   private currentChaseSpeed: number = 3.0;
   private currentDamage: number = 25;
   private isAggressive: boolean = true;
+  private isRoaming: boolean = false;
 
   preStart(): void {
     this.hitSfx = this.props.hitSfx?.as(hz.AudioGizmo);
     this.deathSfx = this.props.deathSfx?.as(hz.AudioGizmo);
     this.deathVfx = this.props.deathVfx?.as(hz.ParticleGizmo);
   }
-
-
 
   start() {
     super.start();
@@ -110,26 +126,41 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     this.currentChaseSpeed = this.props.chaseSpeed;
     this.currentDamage = this.props.baseDamage;
     this.isAggressive = this.props.isAggressive;
+    this.isRoaming = this.props.isRoaming;
 
     this.dead = false;
-    this.setState(EnemyNPCState.Idle);
     this.startLocation = this.entity.position.get();
+
+    // Setup roaming bounding box
+    if (this.isRoaming) {
+      this.setupRoamingBounds();
+      this.setState(EnemyNPCState.Patrolling);
+      this.newDestinationTimer = this.getNewDestinationDelay();
+      this.findNewRoamDestination();
+    } else {
+      this.setState(EnemyNPCState.Idle);
+    }
 
     this.setupTriggers();
     this.setupCombatEvents();
-
   }
 
-
-  update(deltaTime: number) {
-    super.update(deltaTime);
-
-    if (this.isAggressive) {
-      this.updateVisionCheck();
+  private setupRoamingBounds() {
+    if (this.props.navMeshVolume) {
+      const navMeshVolume = this.props.navMeshVolume;
+      const bbScale = navMeshVolume.scale.get().mul(0.5);
+      const bbPosition = navMeshVolume.position.get();
+      this.boundingBox = {
+        min: bbPosition.add(new hz.Vec3(-bbScale.x, 0, -bbScale.z)),
+        max: bbPosition.add(new hz.Vec3(bbScale.x, 0, bbScale.z))
+      };
+    } else {
+      // Use radius-based roaming around start location
+      this.boundingBox = {
+        min: this.startLocation.add(new hz.Vec3(-this.props.roamRadius, 0, -this.props.roamRadius)),
+        max: this.startLocation.add(new hz.Vec3(this.props.roamRadius, 0, this.props.roamRadius))
+      };
     }
-
-    this.updateStateMachine(deltaTime);
-    this.updateLookAt();
   }
 
   private setupTriggers() {
@@ -145,17 +176,6 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
           }
         }
       );
-
-      // this.connectCodeBlockEvent(
-      //   this.props.trigger,
-      //   hz.CodeBlockEvents.OnPlayerExitTrigger,
-      //   (player) => {
-      //     if (player && player !== this.world.getServerPlayer()) {
-      //       console.log(`[EnemyNPC] Player ${player.name.get()} left aggro range`);
-      //       this.onPlayerLeaveAggroRange(player);
-      //     }
-      //   }
-      // );
     }
 
     // Hitbox for weapon collision
@@ -188,6 +208,16 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     });
   }
 
+  update(deltaTime: number) {
+    super.update(deltaTime);
+
+    if (this.isAggressive) {
+      this.updateVisionCheck();
+    }
+
+    this.updateStateMachine(deltaTime);
+    this.updateLookAt();
+  }
 
   // ============== PUBLIC API FOR RUNTIME MODIFICATIONS ==============
 
@@ -222,13 +252,30 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
    * Toggle aggressive behavior
    */
   public setAggressive(aggressive: boolean) {
-    this.isAggressive = aggressive;
-    if (!aggressive && this.targetPlayer) {
-      this.setState(EnemyNPCState.Returning);
+
+    if (!this.isAggressive && this.targetPlayer) {
+      if (this.isRoaming) {
+        this.setState(EnemyNPCState.Patrolling);
+      } else {
+        this.setState(EnemyNPCState.Returning);
+      }
     }
     console.log(`[EnemyNPC] Aggressive mode: ${aggressive}`);
   }
 
+  /**
+   * Toggle roaming behavior
+   */
+  public setRoaming(roaming: boolean) {
+    this.isRoaming = roaming;
+    if (roaming && this.state === EnemyNPCState.Idle && !this.targetPlayer) {
+      this.setupRoamingBounds();
+      this.setState(EnemyNPCState.Patrolling);
+    } else if (!roaming && this.state === EnemyNPCState.Patrolling) {
+      this.setState(EnemyNPCState.Idle);
+    }
+    console.log(`[EnemyNPC] Roaming mode: ${roaming}`);
+  }
 
   /**
    * Heal the NPC
@@ -241,7 +288,6 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     console.log(`[EnemyNPC] Healed ${amount}. HP: ${this.currentHitPoints}/${this.props.maxHitPoints}`);
   }
 
-
   // ============== AGGRO SYSTEM ==============
 
   private onPlayerEnterAggroRange(player: hz.Player) {
@@ -250,7 +296,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     this.players.add(player);
 
     // If not already engaged, start combat
-    if (!this.targetPlayer && this.state === EnemyNPCState.Idle) {
+    if (!this.targetPlayer && (this.state === EnemyNPCState.Idle || this.state === EnemyNPCState.Patrolling)) {
       this.targetPlayer = player;
       this.aggroLocation = this.entity.position.get();
       this.setState(EnemyNPCState.Taunting);
@@ -263,9 +309,13 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     if (player === this.targetPlayer) {
       this.targetPlayer = undefined;
 
-      // If no other players in range, return home
+      // If no other players in range, return home or resume roaming
       if (this.players.size === 0 && this.state !== EnemyNPCState.Dead) {
-        this.setState(EnemyNPCState.Returning);
+        if (this.isRoaming) {
+          this.setState(EnemyNPCState.Patrolling);
+        } else {
+          this.setState(EnemyNPCState.Returning);
+        }
       }
     }
   }
@@ -304,6 +354,77 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     }
   }
 
+  // ============== ROAMING SYSTEM ==============
+
+  private updatePatrolling(deltaTime: number) {
+    if (!this.isRoaming || !this.navMeshAgent) return;
+
+    const distanceToTarget = this.navMeshAgent.remainingDistance.get();
+
+    if (distanceToTarget < 0.5) {
+      if (!this.isIdling) {
+        this.randomIdle();
+      }
+
+      this.newDestinationTimer -= deltaTime;
+      if (this.newDestinationTimer <= 0) {
+        this.newDestinationTimer = this.getNewDestinationDelay();
+        this.findNewRoamDestination();
+      }
+    }
+  }
+
+  private randomIdle() {
+    this.isIdling = true;
+    this.navMeshAgent?.maxSpeed.set(0);
+  }
+
+  private setNewRoamDestination(destination: hz.Vec3) {
+    this.isIdling = false;
+    this.lookAt = destination;
+
+    this.async.setTimeout(() => {
+      this.navMeshAgent?.destination.set(destination);
+      this.navMeshAgent?.maxSpeed.set(this.props.roamSpeed);
+    }, 300);
+  }
+
+  private findNewRoamDestination() {
+    if (!this.boundingBox) return;
+
+    this.destinationAttempts++;
+    const rPosition = this.getRandomRoamDestination();
+    const delta = rPosition.sub(this.getHeadPosition());
+    const dotFwd = hz.Vec3.dot(this.entity.forward.get(), delta);
+
+    // Prefer destinations in front and not too far
+    if (delta.magnitude() > 6 || (dotFwd < 0.1 && this.destinationAttempts < 5)) {
+      this.async.setTimeout(() => {
+        this.findNewRoamDestination();
+      }, 200);
+    } else {
+      this.destinationAttempts = 0;
+      this.setNewRoamDestination(rPosition);
+    }
+  }
+
+  private getRandomRoamDestination(): hz.Vec3 {
+    if (!this.boundingBox) return this.startLocation;
+
+    const rx = Math.random() * (this.boundingBox.max.x - this.boundingBox.min.x) + this.boundingBox.min.x;
+    const rz = Math.random() * (this.boundingBox.max.z - this.boundingBox.min.z) + this.boundingBox.min.z;
+    return new hz.Vec3(rx, this.startLocation.y, rz);
+  }
+
+  private getHeadPosition(): hz.Vec3 {
+    const headPosition = this.entity.position.get();
+    headPosition.y += this.props.headHeight;
+    return headPosition;
+  }
+
+  private getNewDestinationDelay(): number {
+    return Math.random() * (this.props.maxIdleTime - this.props.minIdleTime) + this.props.minIdleTime;
+  }
 
   // ============== COMBAT SYSTEM ==============
 
@@ -351,7 +472,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     this.triggerHitAnimation();
     this.applyKnockback(attacker, this.props.knockbackForce);
 
-    console.log(`[EnemyNPC] Took ${amount} damage. HP: ${this.currentHitPoints}/${this.props.maxHitPoints}`);
+    console.error(`[EnemyNPC] Took ${amount} damage. HP: ${this.currentHitPoints}/${this.props.maxHitPoints}`);
 
     if (this.currentHitPoints <= 0) {
       this.handleDeath();
@@ -420,13 +541,16 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     }, this.props.deathDuration * 1000);
   }
 
-
   // ============== STATE MACHINE ==============
 
   private updateStateMachine(deltaTime: number) {
     switch (this.state) {
       case EnemyNPCState.Idle:
         // Handled by vision check
+        break;
+
+      case EnemyNPCState.Patrolling:
+        this.updatePatrolling(deltaTime);
         break;
 
       case EnemyNPCState.Taunting:
@@ -449,6 +573,8 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
         if (this.stateTimer <= 0) {
           if (this.targetPlayer) {
             this.setState(EnemyNPCState.Chasing);
+          } else if (this.isRoaming) {
+            this.setState(EnemyNPCState.Patrolling);
           } else {
             this.setState(EnemyNPCState.Returning);
           }
@@ -467,7 +593,11 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
 
   private updateChasing(deltaTime: number) {
     if (!this.targetPlayer) {
-      this.setState(EnemyNPCState.Returning);
+      if (this.isRoaming) {
+        this.setState(EnemyNPCState.Patrolling);
+      } else {
+        this.setState(EnemyNPCState.Returning);
+      }
       return;
     }
 
@@ -484,7 +614,11 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
 
   private updateAttacking(deltaTime: number) {
     if (!this.targetPlayer) {
-      this.setState(EnemyNPCState.Returning);
+      if (this.isRoaming) {
+        this.setState(EnemyNPCState.Patrolling);
+      } else {
+        this.setState(EnemyNPCState.Returning);
+      }
       return;
     }
 
@@ -516,26 +650,25 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     const distSq = this.entity.position.get().distanceSquared(homePos);
 
     if (distSq < 1.0) {
-      this.setState(EnemyNPCState.Idle);
+      if (this.isRoaming) {
+        this.setState(EnemyNPCState.Patrolling);
+      } else {
+        this.setState(EnemyNPCState.Idle);
+      }
     }
   }
 
   private dealDamageToPlayer() {
     if (!this.targetPlayer) return;
 
-    // This would integrate with your player health system
     console.log(`[EnemyNPC] Dealing ${this.currentDamage} damage to player`);
-
-    // Example: You'd broadcast a damage event here
-    // this.sendNetworkBroadcastEvent(EventsService.CombatEvents.DealDamage, {
-    //   target: this.targetPlayer,
-    //   amount: this.currentDamage
-    // });
   }
 
   private updateLookAt() {
-    if (this.targetPlayer && this.state !== EnemyNPCState.Returning) {
+    if (this.targetPlayer && this.state !== EnemyNPCState.Returning && this.state !== EnemyNPCState.Patrolling) {
       this.lookAt = this.targetPlayer.position.get();
+    } else if (this.state === EnemyNPCState.Patrolling && !this.isIdling) {
+      // Look at roam destination is handled in setNewRoamDestination
     } else {
       this.lookAt = undefined;
     }
@@ -553,6 +686,13 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
         this.aggroLocation = undefined;
         break;
 
+      case EnemyNPCState.Patrolling:
+        this.navMeshAgent?.isImmobile.set(false);
+        this.navMeshAgent?.maxSpeed.set(this.props.roamSpeed);
+        this.newDestinationTimer = this.getNewDestinationDelay();
+        this.findNewRoamDestination();
+        break;
+
       case EnemyNPCState.Taunting:
         this.stateTimer = this.props.tauntDuration;
         this.navMeshAgent?.isImmobile.set(true);
@@ -565,7 +705,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
         break;
 
       case EnemyNPCState.Attacking:
-        this.attackTimer = 0; // Attack immediately when entering state
+        this.attackTimer = 0;
         this.navMeshAgent?.maxSpeed.set(0);
         break;
 
@@ -591,7 +731,6 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   private onLeaveState(state: EnemyNPCState) {
     switch (state) {
       case EnemyNPCState.Dead:
-        // Reset on respawn
         this.dead = false;
         this.targetPlayer = undefined;
         this.lookAt = undefined;
@@ -611,10 +750,6 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
       this.onEnterState(this.state);
     }
   }
-
-
-
 }
+
 hz.Component.register(EnemyNPC);
-
-
