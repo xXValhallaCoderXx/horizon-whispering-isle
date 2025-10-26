@@ -16,6 +16,8 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     // Optional: a ParticleGizmo entity to play when a quest item is collected
     collectVfx: { type: hz.PropTypes.Entity },
     storageBagSpawnPoint: { type: hz.PropTypes.Entity },
+    starterAxeAsset: { type: hz.PropTypes.Asset },
+    starterAxeSpawnPoint: { type: hz.PropTypes.Entity },
   };
 
   preStart(): void {
@@ -34,6 +36,12 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     this.connectLocalBroadcastEvent(
       EventsService.QuestEvents.RefreshQuestHUD,
       (payload: QuestPayload) => this.onRefreshQuestHUD(payload)
+    );
+
+    // TODO - Hack for now remove later
+    this.connectLocalBroadcastEvent(
+      EventsService.QuestEvents.SpawnPlayerQuestReward,
+      (payload: QuestPayload) => this.spawnStarterAxeForPlayer(payload.player)
     );
 
     // TODO BELOW
@@ -350,8 +358,6 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     questDAO.updateQuestStep(questId, nextStepIndex);
 
 
-
-
     // Get new stage config
     const newStageConfig = questDAO.getStageByStepIndex(nextStepIndex);
 
@@ -377,6 +383,82 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     }
   }
 
+  private async spawnStarterAxeForPlayer(player: hz.Player) {
+    try {
+      const asset = this.props.starterAxeAsset as hz.Asset;
+      if (!asset) {
+        console.warn('[QuestManager] starterAxeAsset not set; cannot spawn axe.');
+        return;
+      }
+
+      const spawnPoint = this.props.starterAxeSpawnPoint as hz.Entity | undefined;
+      if (!spawnPoint) {
+        console.warn('[QuestManager] starterAxeSpawnPoint not set; cannot spawn axe.');
+        return;
+      }
+
+      // Use the spawn point's position
+      const spawnPos = spawnPoint.position.get();
+      const spawned = await this.world.spawnAsset(asset, spawnPos);
+      const root = spawned?.[0];
+
+      // Pan camera to the axe
+      this.sendNetworkEvent(player, EventsService.CameraEvents.PanToEntity, {
+        player,
+        entity: root,
+        duration: 1500
+      });
+
+      if (!root) return;
+      // Make visible and set ownership
+      root.visible.set(true);
+      try { root.owner.set(player); } catch { }
+
+      console.log(`[QuestManager] Spawned starter axe for ${player.name.get()} at`, spawnPos);
+    } catch (e) {
+      console.warn('[QuestManager] Failed to spawn starter axe', e);
+    }
+  }
+
+
+
+  private async spawnStorageBagForPlayer(player: hz.Player) {
+    try {
+      const asset = this.props.storageBagAsset as hz.Asset;
+      if (!asset) {
+        console.warn('[QuestManager] storageBagAsset not set; cannot spawn bag.');
+        return;
+      }
+
+      const spawnPoint = this.props.storageBagSpawnPoint as hz.Entity | undefined;
+      if (!spawnPoint) {
+        console.warn('[QuestManager] storageBagSpawnPoint not set; cannot spawn bag.');
+        return;
+      }
+
+      // Use the spawn point's position
+      const spawnPos = spawnPoint.position.get();
+      const spawned = await this.world.spawnAsset(asset, spawnPos);
+      const root = spawned?.[0];
+
+      this.sendNetworkEvent(player, EventsService.CameraEvents.PanToEntity, { player, entity: root, duration: 1500 });
+      if (!root) return;
+      // Prefer visible world spawn so player can pick it up
+      root.visible.set(true);
+      // Ownership can help scripts resolve player interactions
+      try { root.owner.set(player); } catch { }
+      // this.spawnedBagByPlayer.set(player, root);
+      console.log(`[QuestManager] Spawned storage bag for ${player.name.get()} at`, spawnPos);
+    } catch (e) {
+      console.warn('[QuestManager] Failed to spawn storage bag', e);
+    }
+  }
+
+
+
+  /* OLDER FUNCTIONS TO BE EXPLORED */
+
+
   private emitQuestProgressUpdated(player: hz.Player, quest: Quest) { // Pass the LIVE quest object
     try {
       // const stage = this.computeStageFor(quest); // Compute stage based on LIVE data
@@ -398,50 +480,8 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     }
   }
 
-  // Map LIVE quest state to DialogScript QuestStage for dialog gating
-  private computeStageFor(quest: Quest): string { // Pass the LIVE quest object
-    if (!quest) return 'NotStarted'; // Should not happen if called correctly
-    if (quest.status === QuestStatus.Completed) return 'Complete';
-    if (quest.status === QuestStatus.NotStarted) return 'NotStarted'; // Although we usually check InProgress
-
-    // Get static definition to know the order and types of objectives
-    const questDef = QUEST_DEFINITIONS[quest.questId];
-    if (!questDef) {
-      console.error(`[QuestManager] Cannot compute stage, definition missing for ${quest.questId}`);
-      return 'NotStarted'; // Fallback
-    }
-
-    // Find the *first* objective definition whose progress is NOT marked as completed in the LIVE quest object
-    for (const objDef of questDef.objectives) {
-      const objectiveProgress = quest.objectives[objDef.objectiveId as any];
-      // Check if progress exists and is NOT completed
-      if (!objectiveProgress || !objectiveProgress.isCompleted) {
-        // Map this objective's type to a stage name
-        switch (objDef.type) {
-          case ObjectiveType.Collect:
-            return 'Collecting'; // Example stage name
-          case ObjectiveType.Talk:
-            // Check if requirements met, maybe needs different stage like 'ReadyToTalk' vs 'GoTalk'
-            return 'ReturnToNPC'; // Example stage name
-          case ObjectiveType.Hunt:
-            return 'Hunting'; // Example stage name
-          // Add cases for other objective types
-          default:
-            console.warn(`[QuestManager] Unhandled objective type for stage computation: ${objDef.type}`);
-            return 'InProgress'; // Generic fallback stage
-        }
-      }
-    }
-
-    // If we looped through all definitions and all corresponding progress entries are completed
-    console.warn(`[QuestManager] computeStageFor reached end, but quest status is ${quest.status}. Marking Complete.`);
-    return 'Complete'; // Should ideally align with quest.status being Completed already
-  }
 
 
-
-
-  /* OLDER FUNCTIONS TO BE EXPLORED */
 
 
   // --- MODIFIED: onGenericQuestSubmission now persists progress ---
@@ -570,43 +610,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   }
 
 
-  private async spawnStorageBagForPlayer(player: hz.Player) {
-    try {
-      const asset = this.props.storageBagAsset as hz.Asset;
-      if (!asset) {
-        console.warn('[QuestManager] storageBagAsset not set; cannot spawn bag.');
-        return;
-      }
 
-      const spawnPoint = this.props.storageBagSpawnPoint as hz.Entity | undefined;
-      if (!spawnPoint) {
-        console.warn('[QuestManager] storageBagSpawnPoint not set; cannot spawn bag.');
-        return;
-      }
-
-
-
-      // Use the spawn point's position
-      const spawnPos = spawnPoint.position.get();
-
-      const spawned = await this.world.spawnAsset(asset, spawnPos);
-
-
-
-      const root = spawned?.[0];
-
-      this.sendNetworkEvent(player, EventsService.CameraEvents.PanToEntity, { player, entity: root, duration: 1500 });
-      if (!root) return;
-      // Prefer visible world spawn so player can pick it up
-      root.visible.set(true);
-      // Ownership can help scripts resolve player interactions
-      try { root.owner.set(player); } catch { }
-      // this.spawnedBagByPlayer.set(player, root);
-      console.log(`[QuestManager] Spawned storage bag for ${player.name.get()} at`, spawnPos);
-    } catch (e) {
-      console.warn('[QuestManager] Failed to spawn storage bag', e);
-    }
-  }
 
   // Ensure the player has an active quest instance cloned from the definitions
   private ensureActiveQuest(player: hz.Player, questId: string, createIfMissing: boolean = false): Quest | null {

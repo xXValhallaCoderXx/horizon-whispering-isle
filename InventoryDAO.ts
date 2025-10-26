@@ -4,11 +4,13 @@ import { INVENTORY_STATE_KEY } from "constants";
 export interface InventoryDaoState {
   isStorageBagAcquired: boolean;
   items: string[];
+  wearables: string[];
 }
 
 const INVENTORY_DAO_DEFAULT_STATE: InventoryDaoState = {
   isStorageBagAcquired: false,
   items: [],
+  wearables: [],
 };
 
 export class InventoryDAO {
@@ -46,6 +48,32 @@ export class InventoryDAO {
     }
     this.saveState(newState);
   }
+
+  public addItem(itemId: string): void {
+    const state = this.getState();
+    if (state.items.includes(itemId)) {
+      console.warn(`[InventoryDAO] Item ${itemId} already in inventory.`);
+      return;
+    }
+    const newState: InventoryDaoState = {
+      ...state,
+      items: [...state.items, itemId]
+    }
+    this.saveState(newState);
+  }
+
+  public removeItem(itemId: string): void {
+    const state = this.getState();
+    if (!state.items.includes(itemId)) {
+      console.warn(`[InventoryDAO] Item ${itemId} not found in inventory.`);
+      return;
+    }
+    const newState: InventoryDaoState = {
+      ...state,
+      items: state.items.filter(id => id !== itemId)
+    }
+    this.saveState(newState);
+  } 
 
   // --- PRIVATE UTILITIES (For Robustness and Efficiency) ---
   private saveState(state: InventoryDaoState): void {

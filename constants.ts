@@ -12,6 +12,7 @@ export class EventsService {
     static readonly PlayerEvents = {
         OnPlayerStateLoaded: new LocalEvent<{ player: Player }>('player.on_player_state_loaded'),
         DisplayHealthHUD: new NetworkEvent<{ player: Player; currentHealth: number; maxHealth: number; name: string }>('player.display_health_hud'),
+
     }
 
     static readonly CameraEvents = {
@@ -24,7 +25,7 @@ export class EventsService {
         DisplayQuestHUD: new NetworkEvent<IDisplayQuestHUD>("DisplayQuestHUD"), // Initiate showing the Quest HUD for a player
         RefreshQuestHUD: new NetworkEvent<IDisplayQuestHUD>("RefreshQuestHUD"), // Update the Quest HUD for a player
         SubmitQuestCollectProgress: new NetworkEvent<ISubmitQuestCollectProgress>("SubmitQuestCollectProgress"), // When collecting an item - submit to check quest submission.
-
+        SpawnPlayerQuestReward: new NetworkEvent<{ player: Player; item: string }>("SpawnPlayerQuestReward"), // Spawn quest reward for player
 
 
         // NOT USED YET

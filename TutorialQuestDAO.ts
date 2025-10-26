@@ -106,7 +106,14 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     nextStepIndex: 4,
     action: QuestStageAction.ADVANCE_QUEST,
     description: "Return coconuts and advance to kill chickens",
-    objectives: []
+    objectives: [
+      {
+        objectiveId: 'return_coconuts',
+        itemType: 'return_coconuts',
+        targetCount: 1,
+        description: 'Return to the NPC'
+      }
+    ]
   },
   [TUTORIAL_QUEST_STAGES.STAGE_STEP_4_KILL_CHICKENS]: {
     stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_4_KILL_CHICKENS,
@@ -129,7 +136,12 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     nextStepIndex: 6,
     action: QuestStageAction.ADVANCE_QUEST,
     description: "Return meat and advance to collect logs",
-    objectives: []
+    objectives: [{
+      objectiveId: 'return_meat',
+      itemType: 'return_meat',
+      targetCount: 1,
+      description: 'Return to the NPC'
+    }]
   },
   [TUTORIAL_QUEST_STAGES.STAGE_STEP_6_COLLECT_LOGS]: {
     stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_6_COLLECT_LOGS,
@@ -151,7 +163,12 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     stepIndex: 7,
     action: QuestStageAction.COMPLETE_QUEST,
     description: "Return logs and complete quest",
-    objectives: []
+    objectives: [{
+      objectiveId: 'return_logs',
+      itemType: 'return_logs',
+      targetCount: 1,
+      description: 'Return to the NPC'
+    }]
   },
   [TUTORIAL_QUEST_STAGES.STAGE_COMPLETE]: {
     stage: TUTORIAL_QUEST_STAGES.STAGE_COMPLETE,

@@ -165,6 +165,11 @@ export class NPC extends hz.Component<typeof NPC> {
           player,
           questId: TUTORIAL_QUEST_KEY
         });
+
+        this.sendLocalBroadcastEvent(EventsService.QuestEvents.SpawnPlayerQuestReward, {
+          player,
+          item: 'axe'
+        });
         break;
 
       case TUTORIAL_QUEST_STAGES.STAGE_STEP_4_KILL_CHICKENS:
