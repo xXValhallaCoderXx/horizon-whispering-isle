@@ -1,4 +1,4 @@
-import { PropTypes } from "horizon/core";
+import { PropTypes, Player } from "horizon/core";
 import { EventsService } from "constants";
 import {
   UIComponent,
@@ -64,6 +64,14 @@ class PlayerQuestHUD extends UIComponent {
       }
 
     });
+
+    this.connectNetworkEvent(this.entity.owner.get(), EventsService.UIEvents.TogglePlayerUI,
+      (data: { player: Player, visible: boolean }) => {
+        const localPlayer = this.world.getLocalPlayer();
+        if (localPlayer && this.entity.owner.get() === localPlayer) {
+          this.isVisibleBinding.set(data.visible);
+        }
+       });
   }
 
   private updateUIBindings(title: string, objective: string, visible: boolean): void {

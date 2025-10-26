@@ -1,4 +1,5 @@
 import * as hz from 'horizon/core';
+import { EventsService } from 'constants';
 import { Binding, Pressable, Text, UIComponent, UINode, View } from 'horizon/ui';
 import { DialogEvents } from './NPC';
 
@@ -76,11 +77,21 @@ export class Dialog_UI extends UIComponent<typeof Dialog_UI> {
         this.updateText(payload.container);
         this.entity.visible.set(true);
         this.trigger.enabled.set(false);
+        this.sendNetworkEvent(this.localPlayer, EventsService.UIEvents.TogglePlayerUI, {
+          player: this.localPlayer,
+          visible: false
+        });
       } else{
         this.entity.visible.set(false)
         // Suppress the next enter to avoid immediate re-open while still inside the trigger
         this.suppressEnterOnce = true;
         this.lastClosedAt = Date.now();
+
+        this.sendNetworkEvent(this.localPlayer, EventsService.UIEvents.TogglePlayerUI, {
+          player: this.localPlayer,
+          visible: true
+        });
+
         this.async.setTimeout(() => {
           this.trigger.enabled.set(true)
         }, SHOW_RESPONSE_DELAY_MS)

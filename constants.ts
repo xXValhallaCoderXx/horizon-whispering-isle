@@ -32,13 +32,22 @@ export class EventsService {
         DestroyAsset: new NetworkEvent<{ entityId: string; player: Player }>("DestroyAsset"),
     }
 
+    static readonly UIEvents = {
+        TogglePlayerUI: new NetworkEvent<{ player: Player, visible: boolean }>("TogglePlayerUI"),
+    }
+
+
+
     static readonly CombatEvents = {
-        MonsterStartAttackingPlayer: new NetworkEvent<{ player: Player }>('combat.monster_start_attacking_player'),
-        MonsterStopAttackingPlayer: new NetworkEvent<{ player: Player }>('combat.monster_stop_attacking_player'),
+        MonsterTookDamage: new NetworkEvent<{ monsterId: string; damage: number; attackerId?: string }>('combat.monster_took_damage'), // Player -> Server
+        MonsterDied: new NetworkEvent<{ monsterId: string; killerId?: string }>('combat.monster_died'), // Server -> All (if needed for quests)
+        MonsterHealthUpdate: new NetworkEvent<{ monsterId: string; currentHealth: number; maxHealth: number }>('combat.monster_health_update'), // Server -> All
 
         // NOT YET UUSED
         AttackSwingEvent: new NetworkEvent<IAttackSwingPayload>('combat.attack_swing'),
         NPCDeath: new LocalEvent<INPCDeath>('combat.died'),
+        MonsterStartAttackingPlayer: new NetworkEvent<{ player: Player }>('combat.monster_start_attacking_player'),
+        MonsterStopAttackingPlayer: new NetworkEvent<{ player: Player }>('combat.monster_stop_attacking_player'),
         // DONT KNOW
         AttackStart: new NetworkEvent<AttackStartPayload>('combat.attack_start'),
         AttackEnd: new NetworkEvent<AttackEndPayload>('combat.attack_end'),
@@ -185,3 +194,37 @@ export interface IPanToEntityPayload {
     entity: Entity;
     duration?: number;
 }
+
+
+
+
+export interface MonsterStats {
+    health: number;
+    scale: Vec3;
+    // Future stats: damage: number, moveSpeed: number
+}
+
+export interface MonsterConfigData {
+    type: string;
+    label: string;
+    spawnRate: number; // ms between spawn attempts
+    spawnChance: number; // 0..1 per attempt
+    maxActive: number; // Max concurrent spawns for this manager
+    rareChance: number; // 0..1
+    commonStats: MonsterStats;
+    rareStats: MonsterStats;
+}
+
+export const MONSTERS: { [key: string]: MonsterConfigData } = {
+    CHICKEN: {
+        type: "CHICKEN",
+        label: "Chicken",
+        spawnRate: 3000,
+        spawnChance: 0.8,
+        maxActive: 5,
+        rareChance: 0.1,
+        commonStats: { health: 100, scale: Vec3.one },
+        rareStats: { health: 500, scale: new Vec3(1.5, 1.5, 1.5) },
+    },
+
+};

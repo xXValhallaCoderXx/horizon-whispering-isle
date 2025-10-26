@@ -34,7 +34,9 @@ export class PlayerHealthHUD extends UIComponent<typeof PlayerHealthHUD> {
 
 
   initializeUI(): UINode {
-    return View({
+   return UINode.if(
+     this.isVisibleBinding,
+     View({
         style: RootStyle,
         children: [
           // 1. The Frame (Background Image)
@@ -95,7 +97,8 @@ export class PlayerHealthHUD extends UIComponent<typeof PlayerHealthHUD> {
             ],
           }),
         ],
-    })
+      })
+    )
   }
 
   start() {
@@ -106,6 +109,18 @@ export class PlayerHealthHUD extends UIComponent<typeof PlayerHealthHUD> {
           this.setPlayerName(data?.name)
           this.updateHealth(data.currentHealth, data.maxHealth);
           this.setVisible(true);
+        }
+      });
+
+    this.connectNetworkEvent(this.entity.owner.get(), EventsService.UIEvents.TogglePlayerUI,
+      (data: { player: Player, visible: boolean }) => {
+        console.error("TogglePlayerUI event received in PlayerHealthHUD", data);
+        const localPlayer = this.world.getLocalPlayer();
+        console.error("Local player:", localPlayer);
+        console.log("script player", data.player)
+        console.log("entity owner", this.entity.owner.get())
+        if (localPlayer && this.entity.owner.get() === localPlayer) {
+          this.setVisible(data.visible);
         }
       });
   }
