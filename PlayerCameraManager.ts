@@ -26,8 +26,19 @@ class PlayerCameraManager extends hz.Component<typeof PlayerCameraManager> {
 
     const targetPosition = payload.entity.position.get();
     console.log(`Target entity position: ${targetPosition.toString()}`);
-    const cinematicOffset = new hz.Vec3(0, 2, -5);
-    const cinematicCameraPosition = targetPosition.add(cinematicOffset);
+
+    // Get player's current position to determine approach angle
+    const player = this.world.getLocalPlayer();
+    if (!player) return;
+
+    const playerPos = player.position.get();
+    const directionFromPlayer = targetPosition.sub(playerPos).normalize();
+
+    // Place camera 5 units back from target in the direction of player, 2 units up
+    const cinematicCameraPosition = targetPosition
+      .sub(directionFromPlayer.mul(5))
+      .add(new hz.Vec3(0, 2, 0));
+
     const lookVector = targetPosition.sub(cinematicCameraPosition).normalize();
     const cinematicRotation = hz.Quaternion.lookRotation(lookVector, hz.Vec3.up);
 
@@ -37,7 +48,6 @@ class PlayerCameraManager extends hz.Component<typeof PlayerCameraManager> {
       ...transitionOptions,
     });
 
-    // Use async.setTimeout like in DoorCutscene - multiply by 1000 for milliseconds
     this.async.setTimeout(() => {
       console.log("Cinematic hold complete. Returning control.");
       LocalCamera.setCameraModeThirdPerson(transitionOptions);

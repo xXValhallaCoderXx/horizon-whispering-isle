@@ -12,6 +12,7 @@ class WorldManager extends Component<typeof WorldManager> {
     playerServiceAsset: { type: PropTypes.Entity },
     tutorialIslandSpawnPoint: { type: PropTypes.Entity },
     mainIslandSpawnPoint: { type: PropTypes.Entity },
+    // tutorialNpcEntity: { type: PropTypes.Entity },
   };
 
   private currentActivePlayers: Set<Player> = new Set();
@@ -58,6 +59,9 @@ class WorldManager extends Component<typeof WorldManager> {
         this.attachAsset(player, this.props.starterAxeAsset);
       }
       this.teleportPlayer(player, this.props.tutorialIslandSpawnPoint);
+      // if (this.props.tutorialNpcEntity) {
+      //   this.sendNetworkEvent(player, EventsService.CameraEvents.PanToEntity, { player, entity: this.props.tutorialNpcEntity, duration: 1500 });
+      // }
 
     }
   }

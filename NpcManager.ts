@@ -9,15 +9,8 @@ import { EventsService, QuestPayload } from './constants';
  */
 export class NpcManager extends hz.Component<typeof NpcManager> {
     static propsDefinition = {
-        // Optional parent/root to search under for the AssetBundle gizmo
-        npcRoot: { type: hz.PropTypes.Entity, default: undefined },
-        // Optional: directly reference the AssetBundle Gizmo entity if you know it
         npcAssetBundle: { type: hz.PropTypes.Entity, default: undefined },
-
-        // Quest that disables attention for players who accepted it
         questIdToDisableAttention: { type: hz.PropTypes.String, default: 'tutorial_survival' },
-
-        // Attention loop configuration
         attentionLoopEnabled: { type: hz.PropTypes.Boolean, default: true },
         attentionEmotes: { type: hz.PropTypes.StringArray, default: ["EmoteWave", "EmoteTaunt"] },
         attentionEmoteIntervalMsMin: { type: hz.PropTypes.Number, default: 3500 },
@@ -27,7 +20,6 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
     };
 
     private assetRef_?: ab.AssetBundleInstanceReference;
-    private targetEntity_?: hz.Entity; // origin for proximity
     private attentionEmoteTimer_: number | undefined;
     private loopActive_ = false;
     private players_: hz.Player[] = [];
@@ -39,7 +31,35 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
         this.connectLocalBroadcastEvent(EventsService.QuestEvents.QuestStarted, (payload: QuestPayload) => this.onQuestStarted(payload));
         this.connectLocalBroadcastEvent(EventsService.QuestEvents.QuestCompleted, (payload: QuestPayload) => this.onQuestCompleted(payload));
 
-        this.resolveAssetAndStart();
+        // Get asset bundle reference directly
+        if (this.props.npcAssetBundle) {
+            const abg = this.props.npcAssetBundle.as(ab.AssetBundleGizmo);
+            this.assetRef_ = abg?.getRoot?.();
+        }
+
+        if (!this.assetRef_) {
+            console.warn('NpcManager: No AssetBundle configured on', this.entity.name.get());
+            return;
+        }
+
+        // Track players
+        this.connectCodeBlockEvent(this.entity, hz.CodeBlockEvents.OnPlayerEnterWorld, (player: hz.Player) => {
+            this.players_.push(player);
+            this.recomputeLoopActivity();
+        });
+
+        this.connectCodeBlockEvent(this.entity, hz.CodeBlockEvents.OnPlayerExitWorld, (player: hz.Player) => {
+            const idx = this.players_.indexOf(player);
+            if (idx >= 0) this.players_.splice(idx, 1);
+            this.dialogOpenPlayers_.delete(player);
+            this.acceptedPlayers_.delete(player);
+            this.recomputeLoopActivity();
+        });
+
+        // Start loop if enabled
+        if (this.props.attentionLoopEnabled) {
+            this.async.setTimeout(() => this.recomputeLoopActivity(), 100);
+        }
     }
 
     // Public API for other scripts (e.g., NPC.ts)
@@ -139,13 +159,13 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
     }
 
     private getNearbyEligiblePlayers(): hz.Player[] {
-        const origin = (this.targetEntity_ ?? this.entity).position.get();
+        const origin = this.entity.position.get();
         const radius = Math.max(0, this.props.attentionRadius ?? 8);
         const result: hz.Player[] = [];
         for (const p of this.players_) {
             try {
                 const dist = p.position.get().sub(origin).magnitude();
-                if (dist <= radius && this.playerNeedsAttention(p)) {
+                if (dist <= radius && !this.acceptedPlayers_.has(p)) {
                     result.push(p);
                 }
             } catch (_e) {
@@ -155,12 +175,7 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
         return result;
     }
 
-    // Replace with your real per-player logic
-    private playerNeedsAttention(player: hz.Player): boolean {
-        // If player has accepted the quest of interest, they don't need idle attention
-        if (this.acceptedPlayers_.has(player)) return false;
-        return true;
-    }
+
 
     private chooseRandom<T>(arr: ReadonlyArray<T>): T | undefined {
         if (!arr || arr.length === 0) return undefined;
@@ -168,92 +183,9 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
         return arr[idx];
     }
 
-    private resolveAssetAndStart() {
-        // Resolve explicit asset first if provided
-        let abg: ab.AssetBundleGizmo | undefined;
-        let ref: ab.AssetBundleInstanceReference | undefined;
-        if (this.props.npcAssetBundle) {
-            const explicit = this.props.npcAssetBundle.as(ab.AssetBundleGizmo);
-            const r = explicit?.getRoot?.();
-            if (explicit && r) {
-                abg = explicit; ref = r;
-            }
-        }
 
-        // Else, search under npcRoot or this.entity
-        if (!ref) {
-            const searchRoot = this.props.npcRoot ?? this.entity;
-            const found = this.findAssetBundle(searchRoot, 12);
-            if (found) { abg = found.abg; ref = found.root; }
-            if (!abg || !ref) {
-                console.warn('NpcManager: No AssetBundle found under', searchRoot.name.get());
-                return;
-            }
-        }
 
-        this.assetRef_ = ref;
-        this.targetEntity_ = abg;
 
-        // Track players for proximity eligibility
-        this.connectCodeBlockEvent(this.entity, hz.CodeBlockEvents.OnPlayerEnterWorld, (player: hz.Player) => {
-            this.players_.push(player);
-            this.recomputeLoopActivity();
-        });
-        this.connectCodeBlockEvent(this.entity, hz.CodeBlockEvents.OnPlayerExitWorld, (player: hz.Player) => {
-            const idx = this.players_.indexOf(player);
-            if (idx >= 0) this.players_.splice(idx, 1);
-            // Remove from accepted/dialog sets to avoid leaks
-            this.dialogOpenPlayers_.delete(player);
-            this.acceptedPlayers_.delete(player);
-            this.recomputeLoopActivity();
-        });
-
-        // Wait for UAB + root ready before starting (best-effort)
-        const tryStartWhenReady = (attempts: number) => {
-            const ready = (abg?.isLoaded?.() ?? true) && (ref?.isLoaded?.() ?? true);
-            if (ready) {
-                if (this.props.attentionLoopEnabled) this.async.setTimeout(() => this.recomputeLoopActivity(), 50);
-                // Optional: log available animator parameters once on first start
-                try { const params = this.assetRef_?.getAnimationParameters?.(); } catch { }
-                return;
-            }
-            if (attempts <= 0) {
-                console.warn('NpcManager: Asset not reported ready; starting loop anyway');
-                if (this.props.attentionLoopEnabled) this.async.setTimeout(() => this.recomputeLoopActivity(), 50);
-                return;
-            }
-            this.async.setTimeout(() => tryStartWhenReady(attempts - 1), 100);
-        };
-        tryStartWhenReady(30); // ~3s
-    }
-
-    private findAssetBundle(root: hz.Entity, depth: number = 8): { abg: ab.AssetBundleGizmo, root: ab.AssetBundleInstanceReference } | undefined {
-        // Try root as gizmo
-        let abg = root.as(ab.AssetBundleGizmo);
-        let ref = abg?.getRoot?.();
-        if (ref) return { abg, root: ref } as any;
-        // DFS children
-        const found = this.findChildAssetBundleGizmo(root, depth);
-        if (found) {
-            return { abg: found, root: found.getRoot() };
-        }
-        return undefined;
-    }
-
-    private findChildAssetBundleGizmo(parent: hz.Entity, maxDepth: number = 6): ab.AssetBundleGizmo | undefined {
-        if (maxDepth < 0) return undefined;
-        try {
-            const kids = parent.children.get() || [];
-            for (const child of kids) {
-                const abg = child.as(ab.AssetBundleGizmo);
-                const root = abg?.getRoot?.();
-                if (root) return abg;
-                const nested = this.findChildAssetBundleGizmo(child, maxDepth - 1);
-                if (nested) return nested;
-            }
-        } catch { /* ignore */ }
-        return undefined;
-    }
 
     // --- Quest gating helpers ---
     private isQuestOfInterest(questId: string | undefined): boolean {
@@ -279,12 +211,8 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
         }
     }
 
-    private anyNonAcceptedPlayersInWorld(): boolean {
-        for (const p of this.players_) {
-            if (!this.acceptedPlayers_.has(p)) return true;
-        }
-        return false;
-    }
+
+
 
     private recomputeLoopActivity() {
         if (!this.props.attentionLoopEnabled) {
@@ -292,7 +220,9 @@ export class NpcManager extends hz.Component<typeof NpcManager> {
             return;
         }
 
-        const shouldRun = this.anyNonAcceptedPlayersInWorld();
+        // Check if any player in world needs attention
+        const shouldRun = this.players_.some(p => !this.acceptedPlayers_.has(p));
+
         if (shouldRun && !this.loopActive_) {
             this.startAttentionLoop();
         } else if (!shouldRun && this.loopActive_) {
