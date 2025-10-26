@@ -1,4 +1,4 @@
-import { EventsService, PlayerState } from 'constants';
+import { EventsService } from 'constants';
 import { AudioGizmo, Component, PropTypes, SpawnPointGizmo, Player, CodeBlockEvents, AttachablePlayerAnchor, AttachableEntity, AudioOptions, Entity, AudibilityMode, PlayerVisibilityMode, Asset, GrabbableEntity } from 'horizon/core';
 import { PlayerStateService } from 'PlayerStateService';
 
@@ -22,7 +22,7 @@ class WorldManager extends Component<typeof WorldManager> {
     this.connectCodeBlockEvent(this.entity, CodeBlockEvents.OnPlayerExitWorld, this.playerExitWorld)
     this.connectLocalBroadcastEvent(
       EventsService.PlayerEvents.OnPlayerStateLoaded,
-      (payload: { player: Player; state: PlayerState }) => {
+      (payload: { player: Player; state: any }) => {
         this.playerDataInitialized(payload.player);
       }
     );

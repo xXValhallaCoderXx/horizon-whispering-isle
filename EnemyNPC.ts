@@ -1,8 +1,6 @@
 import * as hz from "horizon/core";
-import { healthData } from "HealthData";
 import { EventsService } from "constants";
 import { BaseNPC, BaseNPCEmote } from "./BaseNPC";
-import { Animation, Easing } from 'horizon/ui';
 
 interface BoundingBox {
   min: hz.Vec3;

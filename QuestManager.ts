@@ -1,9 +1,7 @@
 import * as hz from 'horizon/core';
-import { VARIABLE_GROUPS } from 'constants';
-import { PlayerState } from 'constants';
-import { EventsService, ISubmitQuestCollectProgress, QuestPayload, QUEST_DEFINITIONS, Quest, QuestObjective, ObjectiveType, QuestStatus, QuestProgressUpdatedPayload } from 'constants';
+import { EventsService, ISubmitQuestCollectProgress, QuestPayload, QuestStatus } from 'constants';
 import { PlayerStateService } from 'PlayerStateService';
-import { QuestLog, TUTORIAL_QUEST_KEY } from 'TutorialQuestDAO';
+import { TUTORIAL_QUEST_KEY } from 'TutorialQuestDAO';
 
 
 class QuestManager extends hz.Component<typeof QuestManager> {
@@ -54,11 +52,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     );
 
 
-    // Handle generic quest submissions (e.g., Talk/Hunt tokens)
-    this.connectLocalBroadcastEvent(
-      EventsService.QuestEvents.CheckPlayerQuestSubmission,
-      (payload) => this.onGenericQuestSubmission(payload)
-    );
+
   }
 
   start() { }
@@ -454,108 +448,6 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     }
   }
 
-
-
-  /* OLDER FUNCTIONS TO BE EXPLORED */
-
-
-  private emitQuestProgressUpdated(player: hz.Player, quest: Quest) { // Pass the LIVE quest object
-    try {
-      // const stage = this.computeStageFor(quest); // Compute stage based on LIVE data
-      console.error(`[QuestManager] Emitting QuestProgressUpdated for ${player.name.get()}: Quest=${quest.questId},`);
-
-      // Payload includes the live quest object for potential UI updates
-      // const payload: QuestProgressUpdatedPayload = { player, questId: quest.questId, stage, quest };
-      // Send LOCAL event - other server scripts might react (like DialogScript)
-      // this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestProgressUpdated, payload);
-
-      // TODO: Send a NETWORK event specifically for the player's HUD update
-      // This needs a new event type or modification of DisplayQuestHUD
-      // Example:
-      // const objectiveText = this.getCurrentObjectiveText(quest); // Needs implementation
-      // this.sendNetworkEvent(player, EventsService.QuestEvents.UpdateQuestHUDObjective, { questId: quest.questId, objective: objectiveText });
-
-    } catch (e) {
-      console.error("[QuestManager] Error emitting progress update", e);
-    }
-  }
-
-
-
-
-
-  // --- MODIFIED: onGenericQuestSubmission now persists progress ---
-  // Handle local submissions such as Talk/Hunt tokens emitted by NPC or enemies
-  private onGenericQuestSubmission(payload: { player: hz.Player; itemType: string; amount: number }) {
-    console.error("WARNING VIST ME VIST ME")
-    console.error("WARNING WARNING VIST ME VIST ME")
-    const { player, itemType, amount } = payload || ({} as any);
-    if (!player || !itemType) return false as any;
-    const quest = this.ensureActiveQuest(player, 'tutorial_survival');
-    if (!quest) return false as any;
-
-    // Determine objective type from token prefix
-    let type: ObjectiveType | undefined = undefined;
-    if (itemType.startsWith('npc:')) type = ObjectiveType.Talk;
-    else if (itemType === 'chicken' || itemType.startsWith('enemy:') || itemType.startsWith('enemy-')) type = ObjectiveType.Hunt;
-    else type = undefined;
-
-    if (!type) return false as any;
-
-    const matching = quest.objectives.filter(o => !o.isCompleted && o.type === type && o.targetType === itemType);
-    if (matching.length === 0) return false as any;
-
-    let progressed = false;
-    const completedNow: QuestObjective[] = [];
-    for (const obj of matching) {
-      const inc = amount || 0;
-      const before = obj.currentCount;
-      const after = Math.min(obj.targetCount, obj.currentCount + inc);
-      obj.currentCount = after;
-      if (after !== before) progressed = true;
-
-      if (after >= obj.targetCount && !obj.isCompleted) {
-        obj.isCompleted = true;
-        completedNow.push(obj);
-      }
-
-      // --- NEW: Persist objective progress ---
-      if (PlayerStateService.instance) {
-        // PlayerStateService.instance.updateQuestObjective(
-        //   player,
-        //   quest.questId,
-        //   obj.objectiveId,
-        //   obj.currentCount,
-        //   obj.targetCount,
-        //   obj.isCompleted
-        // );
-      }
-    }
-
-    if (!progressed) return false as any;
-
-    if (completedNow.length > 0) {
-      // this.notifyObjectiveCompletion(player, quest, completedNow);
-    }
-
-    // Emit progress updated for dialog gating
-    this.emitQuestProgressUpdated(player, quest);
-
-    // Check completion
-    const allDone = quest.objectives.every(o => o.isCompleted);
-    if (allDone) {
-      quest.status = QuestStatus.Completed;
-      // --- NEW: Persist completion ---
-      if (PlayerStateService.instance) {
-        // PlayerStateService.instance.completeQuest(player, quest.questId);
-      }
-      this.sendLocalBroadcastEvent(EventsService.QuestEvents.QuestCompleted, { player, questId: quest.questId });
-    } else {
-      quest.status = QuestStatus.InProgress;
-    }
-    return true as any;
-  }
-
   private playCollectionSoundForPlayer(player: hz.Player, entityId?: string) {
     try {
       const soundEntity = this.props.collectSound as hz.Entity | undefined;
@@ -596,36 +488,6 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     } catch {}
   }
 
-  private notifyObjectiveCompletion(player: hz.Player, quest: QuestLog, completedObjectives: QuestObjective[]) {
-    try {
-
-      this.playCollectionSoundForPlayer(player);
-      const completedNames = completedObjectives.map(o => o.description || o.objectiveId).join(', ');
-      this.world.ui.showPopupForPlayer(
-        player,
-        `Objective complete: ${completedNames}`,
-        3
-      );
-    } catch { }
-  }
-
-
-
-
-  // Ensure the player has an active quest instance cloned from the definitions
-  private ensureActiveQuest(player: hz.Player, questId: string, createIfMissing: boolean = false): Quest | null {
-    // let quest = this.activeQuestByPlayer.get(player);
-    // if (!quest || quest.questId !== questId) {
-    //   if (!createIfMissing) return null;
-    //   const def = QUEST_DEFINITIONS[questId];
-    //   if (!def) return null;
-    //   quest = deepCloneQuest(def);
-    //   this.activeQuestByPlayer.set(player, quest);
-    // }
-    return null
-  }
-
-  // TODO - IMPROVE THIS
   private getQuestObjectiveText(player: hz.Player, questId: string): string {
     const questDAO = PlayerStateService.instance?.getTutorialDAO(player);
     if (!questDAO) {
@@ -661,8 +523,6 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     // Simple format: "coconut 1/2"
     return `${stageObj.itemType} ${current}/${target}`;
   }
-
-
 
 }
 hz.Component.register(QuestManager);

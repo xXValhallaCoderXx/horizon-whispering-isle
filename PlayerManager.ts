@@ -1,10 +1,8 @@
 import * as hz from "horizon/core";
 import {
-  EventsService,
-  PlayerInitialState,
+  EventsService
 } from "constants";
 import { PlayerStateService } from "PlayerStateService";
-import { PlayerHealthHUD } from "PlayerHealthHUD";
 
 class PlayerManager extends hz.Component<typeof PlayerManager> {
   static propsDefinition = {

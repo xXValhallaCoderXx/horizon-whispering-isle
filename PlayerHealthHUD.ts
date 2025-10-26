@@ -1,5 +1,5 @@
 import { EventsService } from 'constants'
-import { PropTypes, Color, CodeBlockEvents, Player } from 'horizon/core'
+import { PropTypes, Color, Player } from 'horizon/core'
 import {
   UIComponent,
   View,
@@ -110,19 +110,6 @@ export class PlayerHealthHUD extends UIComponent<typeof PlayerHealthHUD> {
       });
   }
 
-  /**
- * Shows the Quest HUD.
- */
-  private show() {
-    this.isVisibleBinding.set(true);
-  }
-
-  /**
-    * Hides the Quest HUD.
-    */
-  private hide() {
-    this.isVisibleBinding.set(false);
-  }
 
   /**
     * Sets the visibility of the Quest HUD.
