@@ -7,10 +7,12 @@ import { Animation, Easing } from 'horizon/ui';
 
 enum EnemyNPCState {
   Idle,
+  Patrolling,
   Taunting,
-  Walking,
-  Running,
+  Chasing,
+  Attacking,
   Hit,
+  Returning,
   Dead,
 }
 
@@ -20,36 +22,63 @@ export const StopAttackingPlayer: hz.NetworkEvent<{ player: hz.Player }> = new h
 class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   static propsDefinition = {
     ...BaseNPC.propsDefinition,
+    // Behavior
+    isAggressive: { type: hz.PropTypes.Boolean, default: true },
+    // Vision & Range
+    maxVisionDistance: { type: hz.PropTypes.Number, default: 10 },
+    maxAttackDistance: { type: hz.PropTypes.Number, default: 2.5 },
+
+    // Combat Stats
+    maxHitPoints: { type: hz.PropTypes.Number, default: 100 },
+    baseDamage: { type: hz.PropTypes.Number, default: 25 },
+    attackCooldown: { type: hz.PropTypes.Number, default: 2.0 },
+
+    // Movement (inherits walkSpeed and runSpeed from BaseNPC)
+    chaseSpeed: { type: hz.PropTypes.Number, default: 3.0 },
+    returnSpeed: { type: hz.PropTypes.Number, default: 2.0 },
+
+    // Animation Durations
+    tauntDuration: { type: hz.PropTypes.Number, default: 2.8 },
+    attackAnimDuration: { type: hz.PropTypes.Number, default: 1.5 },
+    hitAnimDuration: { type: hz.PropTypes.Number, default: 0.5 },
+    deathDuration: { type: hz.PropTypes.Number, default: 3.0 },
+
+    // Knockback
+    knockbackForce: { type: hz.PropTypes.Number, default: 5 },
+    knockbackDuration: { type: hz.PropTypes.Number, default: 0.5 },
+
+    // References
     trigger: { type: hz.PropTypes.Entity },
     hitbox: { type: hz.PropTypes.Entity },
-    maxVisionDistance: { type: hz.PropTypes.Number, default: 7 },
-    maxAttackDistance: { type: hz.PropTypes.Number, default: 5 },
     hitSfx: { type: hz.PropTypes.Entity },
     deathSfx: { type: hz.PropTypes.Entity },
     deathVfx: { type: hz.PropTypes.Entity }
   };
-  hitSfx?: hz.AudioGizmo;
 
+
+  // Audio/Visual
+  hitSfx?: hz.AudioGizmo;
   deathSfx?: hz.AudioGizmo;
   deathVfx?: hz.ParticleGizmo;
-  static tauntingAnimationDuration: number = 2.8;
-  static attackAnimationDuration: number = 2;
-  static hitAnimationDuration: number = 0.5;
-  static deathDuration: number = 3;
-  static maxHitPoints: number = 4;
 
+
+  // Combat State
+  currentHitPoints: number = 100;
   players: Set<hz.Player> = new Set();
-  hitPoints: number = EnemyNPC.maxHitPoints;
   targetPlayer: hz.Player | undefined = undefined;
+
+  // State Machine
   state: EnemyNPCState = EnemyNPCState.Idle;
   stateTimer: number = 0;
   attackTimer: number = 0;
   lastHitTime: number = 0;
 
+  // Position Tracking
   startLocation!: hz.Vec3;
+  aggroLocation?: hz.Vec3;
 
+  // Weapon Detection
   private activeSwings: Set<string> = new Set();
-
   private lastSwingData: {
     weapon: hz.Entity;
     owner: hz.Player;
@@ -58,140 +87,254 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     timestamp: number;
   } | null = null;
 
+  // Dynamic Stats (can be modified at runtime)
+  private currentAttackCooldown: number = 2.0;
+  private currentChaseSpeed: number = 3.0;
+  private currentDamage: number = 25;
+  private isAggressive: boolean = true;
+
   preStart(): void {
     this.hitSfx = this.props.hitSfx?.as(hz.AudioGizmo);
     this.deathSfx = this.props.deathSfx?.as(hz.AudioGizmo);
     this.deathVfx = this.props.deathVfx?.as(hz.ParticleGizmo);
   }
 
+
+
   start() {
     super.start();
+
+    // Initialize stats
+    this.currentHitPoints = this.props.maxHitPoints;
+    this.currentAttackCooldown = this.props.attackCooldown;
+    this.currentChaseSpeed = this.props.chaseSpeed;
+    this.currentDamage = this.props.baseDamage;
+    this.isAggressive = this.props.isAggressive;
+
     this.dead = false;
     this.setState(EnemyNPCState.Idle);
     this.startLocation = this.entity.position.get();
-    if (this.props.trigger !== undefined && this.props.trigger !== null) {
-      // Acquire target(s) when players enter the aggro trigger
-      this.connectCodeBlockEvent(this.props.trigger, hz.CodeBlockEvents.OnPlayerEnterTrigger, (enteredBy) => {
-        const player = enteredBy
-        if (player && player !== this.world.getServerPlayer()) {
-          console.log("Player entered aggro: ", player.name.get());
-          this.onStartAttackingPlayer(player);
-          this.targetPlayer = this.targetPlayer ?? player;
-        }
-      });
 
+    this.setupTriggers();
+    this.setupCombatEvents();
 
-      // this.connectCodeBlockEvent(this.props.trigger, hz.CodeBlockEvents.OnEntityEnterTrigger, (enteredBy) => {
-      //   console.log("Entity entered trigger");
-      //   if (enteredBy.owner.get() !== this.world.getServerPlayer()) {
-      //     console.log("Starting to attack player");
-      //     this.hit();
-      //   }
-      // });
-
-
-    }
-
-    if (this.props.hitbox !== undefined && this.props.hitbox !== null) {
-
-
-      this.connectCodeBlockEvent(this.props.hitbox as hz.Entity, hz.CodeBlockEvents.OnEntityEnterTrigger, (enteredBy) => {
-
-        console.log("Enemy NPC Triggered by Owner: ", enteredBy.owner.get());
-        // Check if this is a weapon and if there's an active swing
-        if (this.lastSwingData && this.activeSwings.size > 0) {
-          const timeSinceSwing = Date.now() - this.lastSwingData.timestamp;
-
-          // Validate hit: weapon matches and within swing duration
-          if (enteredBy.id === this.lastSwingData.weapon.id &&
-            timeSinceSwing < 250) { // Use durationMs from event
-
-            console.log(`Valid hit! Dealing ${this.lastSwingData.damage} damage`);
-            this.takeDamage(this.lastSwingData.damage, this.lastSwingData.owner);
-
-            // Clear swing data to prevent multiple hits from same swing
-            this.lastSwingData = null;
-            this.activeSwings.clear();
-          }
-        }
-      });
-
-    }
-
-    this.connectNetworkBroadcastEvent(EventsService.CombatEvents.AttackSwingEvent, (payload) => {
-      console.log("EnemyNPC Attack Swing Event Recieved:", payload);
-      console.log("EnemyNPC Attack Swing Event Recieved Weapon Owner:", payload.weapon.owner.get());
-
-
-      const swingId = `${payload.weapon.id}_${Date.now()}`;
-      this.activeSwings.add(swingId);
-
-      // Remove swing after its duration
-      this.async.setTimeout(() => {
-        this.activeSwings.delete(swingId);
-      }, payload.durationMs);
-
-      // Store the last swing data for hit validation
-      this.lastSwingData = {
-        weapon: payload.weapon,
-        owner: payload.owner,
-        damage: payload.damage,
-        reach: payload.reach || 2.0,
-        timestamp: Date.now()
-      };
-
-    });
-
-    this.connectNetworkBroadcastEvent(StartAttackingPlayer, ({ player }) => {
-      this.onStartAttackingPlayer(player);
-    });
-    this.connectNetworkBroadcastEvent(StopAttackingPlayer, ({ player }) => {
-      this.onStopAttackingPlayer(player);
-    });
-
-
-    // this.connectNetworkEvent(this.entity, EventsService.CombatEvents.AttackSwingEvent, () => {
-    //   console.log("EnemyNPC received AttackSwingEvent");
-    //   this.hit();
-    // })
   }
+
 
   update(deltaTime: number) {
     super.update(deltaTime);
 
-    this.updateTarget();
+    if (this.isAggressive) {
+      this.updateVisionCheck();
+    }
+
     this.updateStateMachine(deltaTime);
     this.updateLookAt();
   }
 
-  hit() {
-    const now = Date.now() / 1000.0;
-    if (now >= this.lastHitTime + EnemyNPC.hitAnimationDuration) {
-      this.hitPoints--;
-      this.lastHitTime = now;
-      this.hitSfx?.play();
-      this.triggerHitAnimation();
-      this.recieveDamage(25);
-      if (this.hitPoints <= 0) {
-        this.handleDeath();
+  private setupTriggers() {
+    // Aggro trigger - only if aggressive
+    if (this.props.trigger && this.isAggressive) {
+      this.connectCodeBlockEvent(
+        this.props.trigger,
+        hz.CodeBlockEvents.OnPlayerEnterTrigger,
+        (player) => {
+          if (player && player !== this.world.getServerPlayer()) {
+            console.log(`[EnemyNPC] Player ${player.name.get()} entered aggro range`);
+            this.onPlayerEnterAggroRange(player);
+          }
+        }
+      );
 
+      // this.connectCodeBlockEvent(
+      //   this.props.trigger,
+      //   hz.CodeBlockEvents.OnPlayerExitTrigger,
+      //   (player) => {
+      //     if (player && player !== this.world.getServerPlayer()) {
+      //       console.log(`[EnemyNPC] Player ${player.name.get()} left aggro range`);
+      //       this.onPlayerLeaveAggroRange(player);
+      //     }
+      //   }
+      // );
+    }
 
-      } else {
-        this.setState(EnemyNPCState.Hit);
-      }
+    // Hitbox for weapon collision
+    if (this.props.hitbox) {
+      this.connectCodeBlockEvent(
+        this.props.hitbox as hz.Entity,
+        hz.CodeBlockEvents.OnEntityEnterTrigger,
+        (weapon) => {
+          this.onWeaponCollision(weapon);
+        }
+      );
     }
   }
 
-  private onStartAttackingPlayer(player: hz.Player) {
-    this.players.add(player);
+  private setupCombatEvents() {
+    // Listen for weapon swings
+    this.connectNetworkBroadcastEvent(
+      EventsService.CombatEvents.AttackSwingEvent,
+      (payload) => {
+        this.onWeaponSwing(payload);
+      }
+    );
+
+    this.connectNetworkBroadcastEvent(StartAttackingPlayer, ({ player }) => {
+      this.onPlayerEnterAggroRange(player);
+    });
+
+    this.connectNetworkBroadcastEvent(StopAttackingPlayer, ({ player }) => {
+      this.onPlayerLeaveAggroRange(player);
+    });
   }
 
-  private onStopAttackingPlayer(player: hz.Player) {
-    // Remove from the players set
+
+  // ============== PUBLIC API FOR RUNTIME MODIFICATIONS ==============
+
+  /**
+   * Modify attack speed at runtime
+   */
+  public setAttackSpeed(cooldown: number) {
+    this.currentAttackCooldown = Math.max(0.5, cooldown);
+    console.log(`[EnemyNPC] Attack cooldown set to ${this.currentAttackCooldown}s`);
+  }
+
+  /**
+   * Modify movement speed at runtime
+   */
+  public setChaseSpeed(speed: number) {
+    this.currentChaseSpeed = Math.max(0.5, speed);
+    if (this.state === EnemyNPCState.Chasing) {
+      this.navMeshAgent?.maxSpeed.set(this.currentChaseSpeed);
+    }
+    console.log(`[EnemyNPC] Chase speed set to ${this.currentChaseSpeed}`);
+  }
+
+  /**
+   * Modify damage at runtime
+   */
+  public setDamage(damage: number) {
+    this.currentDamage = Math.max(1, damage);
+    console.log(`[EnemyNPC] Damage set to ${this.currentDamage}`);
+  }
+
+  /**
+   * Toggle aggressive behavior
+   */
+  public setAggressive(aggressive: boolean) {
+    this.isAggressive = aggressive;
+    if (!aggressive && this.targetPlayer) {
+      this.setState(EnemyNPCState.Returning);
+    }
+    console.log(`[EnemyNPC] Aggressive mode: ${aggressive}`);
+  }
+
+
+  /**
+   * Heal the NPC
+   */
+  public heal(amount: number) {
+    this.currentHitPoints = Math.min(
+      this.currentHitPoints + amount,
+      this.props.maxHitPoints
+    );
+    console.log(`[EnemyNPC] Healed ${amount}. HP: ${this.currentHitPoints}/${this.props.maxHitPoints}`);
+  }
+
+
+  // ============== AGGRO SYSTEM ==============
+
+  private onPlayerEnterAggroRange(player: hz.Player) {
+    if (!this.isAggressive || this.dead) return;
+
+    this.players.add(player);
+
+    // If not already engaged, start combat
+    if (!this.targetPlayer && this.state === EnemyNPCState.Idle) {
+      this.targetPlayer = player;
+      this.aggroLocation = this.entity.position.get();
+      this.setState(EnemyNPCState.Taunting);
+    }
+  }
+
+  private onPlayerLeaveAggroRange(player: hz.Player) {
     this.players.delete(player);
 
     if (player === this.targetPlayer) {
       this.targetPlayer = undefined;
+
+      // If no other players in range, return home
+      if (this.players.size === 0 && this.state !== EnemyNPCState.Dead) {
+        this.setState(EnemyNPCState.Returning);
+      }
+    }
+  }
+
+  private updateVisionCheck() {
+    if (this.dead || !this.isAggressive) return;
+
+    const myPos = this.entity.position.get();
+    const maxVisionDistSq = this.props.maxVisionDistance * this.props.maxVisionDistance;
+
+    // Check if target player is still in range
+    if (this.targetPlayer) {
+      const targetPos = this.targetPlayer.position.get();
+      const distSq = myPos.distanceSquared(targetPos);
+
+      if (distSq > maxVisionDistSq) {
+        console.log(`[EnemyNPC] Target player left vision range, returning home`);
+        this.onPlayerLeaveAggroRange(this.targetPlayer);
+      }
+    }
+
+    // Find closest player if we don't have a target
+    if (!this.targetPlayer && this.players.size > 0) {
+      let closestDist = maxVisionDistSq;
+      let closest: hz.Player | undefined;
+
+      this.players.forEach(player => {
+        const dist = myPos.distanceSquared(player.position.get());
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = player;
+        }
+      });
+
+      this.targetPlayer = closest;
+    }
+  }
+
+
+  // ============== COMBAT SYSTEM ==============
+
+  private onWeaponSwing(payload: any) {
+    const swingId = `${payload.weapon.id}_${Date.now()}`;
+    this.activeSwings.add(swingId);
+
+    this.async.setTimeout(() => {
+      this.activeSwings.delete(swingId);
+    }, payload.durationMs);
+
+    this.lastSwingData = {
+      weapon: payload.weapon,
+      owner: payload.owner,
+      damage: payload.damage,
+      reach: payload.reach || 2.0,
+      timestamp: Date.now()
+    };
+  }
+
+  private onWeaponCollision(weapon: hz.Entity) {
+    if (!this.lastSwingData || this.activeSwings.size === 0 || this.dead) return;
+
+    const timeSinceSwing = Date.now() - this.lastSwingData.timestamp;
+
+    if (weapon.id === this.lastSwingData.weapon.id && timeSinceSwing < 250) {
+      console.log(`[EnemyNPC] Valid hit! Dealing ${this.lastSwingData.damage} damage`);
+      this.takeDamage(this.lastSwingData.damage, this.lastSwingData.owner);
+
+      this.lastSwingData = null;
+      this.activeSwings.clear();
     }
   }
 
@@ -199,91 +342,58 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     if (this.dead) return;
 
     const now = Date.now() / 1000.0;
-    if (now >= this.lastHitTime + EnemyNPC.hitAnimationDuration) {
-      this.hitPoints -= Math.ceil(amount / 25); // Convert damage to hit points
-      this.lastHitTime = now;
-      this.hitSfx?.play();
-      this.triggerHitAnimation();
-      this.recieveDamage(amount);
-      console.log(`NPC took ${amount} damage. Hit points remaining: ${this.hitPoints}`);
+    if (now < this.lastHitTime + this.props.hitAnimDuration) return;
 
-      // Apply knockback
-      this.applyKnockback(attacker, 5);
-      if (this.hitPoints <= 0) {
-        this.handleDeath();
-      } else {
-        this.setState(EnemyNPCState.Hit);
+    this.currentHitPoints -= amount;
+    this.lastHitTime = now;
+
+    this.hitSfx?.play();
+    this.triggerHitAnimation();
+    this.applyKnockback(attacker, this.props.knockbackForce);
+
+    console.log(`[EnemyNPC] Took ${amount} damage. HP: ${this.currentHitPoints}/${this.props.maxHitPoints}`);
+
+    if (this.currentHitPoints <= 0) {
+      this.handleDeath();
+    } else {
+      this.setState(EnemyNPCState.Hit);
+
+      // Aggro the attacker if not already aggressive towards them
+      if (!this.players.has(attacker)) {
+        this.onPlayerEnterAggroRange(attacker);
       }
     }
   }
-
-  private updateTarget() {
-    const monsterPosition = this.entity.position.get();
-    const maxVisionDistanceSq = this.props.maxVisionDistance * this.props.maxVisionDistance;
-
-    // Remove players that are too far away (cleanup for edge cases like teleporting)
-    const playersToRemove: hz.Player[] = [];
-    this.players.forEach((player) => {
-      const playerPosition = player.position.get();
-      const distanceSq = monsterPosition.distanceSquared(playerPosition);
-      if (distanceSq > maxVisionDistanceSq) {
-        playersToRemove.push(player);
-      }
-    });
-    playersToRemove.forEach(player => this.onStopAttackingPlayer(player));
-
-    // Always find the closest player within range (allows switching targets)
-    let closestDistanceSq = maxVisionDistanceSq;
-    let closestPlayer: hz.Player | undefined = undefined;
-
-    this.players.forEach((player) => {
-      const playerPosition = player.position.get();
-      const distanceSq = monsterPosition.distanceSquared(playerPosition);
-      if (distanceSq < closestDistanceSq) {
-        closestDistanceSq = distanceSq;
-        closestPlayer = player;
-      }
-    });
-
-    this.targetPlayer = closestPlayer;
-  }
-
 
   private applyKnockback(attacker: hz.Player, force: number) {
     const attackerPos = attacker.position.get();
     const enemyPos = this.entity.position.get();
 
-    // Calculate knockback direction (from attacker to enemy)
     const knockbackDir = new hz.Vec3(
       enemyPos.x - attackerPos.x,
-      0, // Keep knockback horizontal
+      0,
       enemyPos.z - attackerPos.z
     ).normalize();
 
-    // Calculate knockback destination
-    const knockbackDistance = force;
     const targetPos = new hz.Vec3(
-      enemyPos.x + knockbackDir.x * knockbackDistance,
+      enemyPos.x + knockbackDir.x * force,
       enemyPos.y,
-      enemyPos.z + knockbackDir.z * knockbackDistance
+      enemyPos.z + knockbackDir.z * force
     );
 
-    // Smoothly move to knockback position
-    const currentPos = this.entity.position.get();
     const startTime = Date.now();
-    const duration = 0.5 * 1000;
+    const duration = this.props.knockbackDuration * 1000;
+    const startPos = this.entity.position.get();
 
     const knockbackInterval = this.async.setInterval(() => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
-
-      // Ease out effect for smoother knockback
       const easeProgress = 1 - Math.pow(1 - progress, 3);
 
       const newPos = new hz.Vec3(
-        currentPos.x + (targetPos.x - currentPos.x) * easeProgress,
-        currentPos.y,
-        currentPos.z + (targetPos.z - currentPos.z) * easeProgress
+        startPos.x + (targetPos.x - startPos.x) * easeProgress,
+        startPos.y,
+        startPos.z + (targetPos.z - startPos.z) * easeProgress
       );
 
       this.entity.position.set(newPos);
@@ -291,108 +401,203 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
       if (progress >= 1) {
         this.async.clearInterval(knockbackInterval);
       }
-    }, 16); // ~60fps
+    }, 16);
   }
 
-  private updateLookAt() {
-    if (this.targetPlayer !== undefined) {
-      this.lookAt = this.targetPlayer.position.get();
-    }
+  private handleDeath() {
+    this.setState(EnemyNPCState.Dead);
+    this.deathSfx?.play();
+    this.deathVfx?.play();
+
+    this.sendNetworkBroadcastEvent(EventsService.CombatEvents.NPCDeath, {
+      targetNpcId: this.entity.id.toString(),
+      enemyType: this.entity.name.get(),
+      killerPlayer: this.targetPlayer as hz.Player,
+    });
+
+    this.async.setTimeout(() => {
+      this.world.deleteAsset(this.entity);
+    }, this.props.deathDuration * 1000);
   }
+
+
+  // ============== STATE MACHINE ==============
 
   private updateStateMachine(deltaTime: number) {
     switch (this.state) {
       case EnemyNPCState.Idle:
-        if (this.targetPlayer !== undefined) {
-          // Taunt when a target is acquired
-
-          this.setState(EnemyNPCState.Taunting);
-        }
+        // Handled by vision check
         break;
+
       case EnemyNPCState.Taunting:
         this.stateTimer -= deltaTime;
         if (this.stateTimer <= 0) {
-          // 20% chances to run, 80% chances to run
-          if (Math.random() <= 0.8) {
-            this.setState(EnemyNPCState.Walking);
-          } else {
-            this.setState(EnemyNPCState.Running);
-          }
+          this.setState(EnemyNPCState.Chasing);
         }
         break;
-      case EnemyNPCState.Walking:
-        this.updateWalkAndRunStates(deltaTime);
+
+      case EnemyNPCState.Chasing:
+        this.updateChasing(deltaTime);
         break;
-      case EnemyNPCState.Running:
-        this.updateWalkAndRunStates(deltaTime);
+
+      case EnemyNPCState.Attacking:
+        this.updateAttacking(deltaTime);
         break;
+
       case EnemyNPCState.Hit:
         this.stateTimer -= deltaTime;
         if (this.stateTimer <= 0) {
-          if (Math.random() <= 0.8) {
-            this.setState(EnemyNPCState.Walking);
+          if (this.targetPlayer) {
+            this.setState(EnemyNPCState.Chasing);
           } else {
-            this.setState(EnemyNPCState.Running);
+            this.setState(EnemyNPCState.Returning);
           }
         }
+        break;
+
+      case EnemyNPCState.Returning:
+        this.updateReturning();
+        break;
+
       case EnemyNPCState.Dead:
         this.stateTimer -= deltaTime;
-        if (this.stateTimer <= 0) {
-          this.setState(EnemyNPCState.Idle);
-        }
         break;
     }
   }
 
+  private updateChasing(deltaTime: number) {
+    if (!this.targetPlayer) {
+      this.setState(EnemyNPCState.Returning);
+      return;
+    }
+
+    const targetPos = this.targetPlayer.position.get();
+    this.navMeshAgent?.destination.set(targetPos);
+
+    const distSq = this.entity.position.get().distanceSquared(targetPos);
+    const attackDistSq = this.props.maxAttackDistance * this.props.maxAttackDistance;
+
+    if (distSq <= attackDistSq) {
+      this.setState(EnemyNPCState.Attacking);
+    }
+  }
+
+  private updateAttacking(deltaTime: number) {
+    if (!this.targetPlayer) {
+      this.setState(EnemyNPCState.Returning);
+      return;
+    }
+
+    // Stop moving while attacking
+    this.navMeshAgent?.destination.set(this.entity.position.get());
+
+    const targetPos = this.targetPlayer.position.get();
+    const distSq = this.entity.position.get().distanceSquared(targetPos);
+    const attackDistSq = this.props.maxAttackDistance * this.props.maxAttackDistance;
+
+    // If player moved out of range, chase again
+    if (distSq > attackDistSq * 1.5) {
+      this.setState(EnemyNPCState.Chasing);
+      return;
+    }
+
+    this.attackTimer -= deltaTime;
+    if (this.attackTimer <= 0) {
+      this.attackTimer = this.currentAttackCooldown;
+      this.triggerAttackAnimation();
+      this.dealDamageToPlayer();
+    }
+  }
+
+  private updateReturning() {
+    const homePos = this.aggroLocation || this.startLocation;
+    this.navMeshAgent?.destination.set(homePos);
+
+    const distSq = this.entity.position.get().distanceSquared(homePos);
+
+    if (distSq < 1.0) {
+      this.setState(EnemyNPCState.Idle);
+    }
+  }
+
+  private dealDamageToPlayer() {
+    if (!this.targetPlayer) return;
+
+    // This would integrate with your player health system
+    console.log(`[EnemyNPC] Dealing ${this.currentDamage} damage to player`);
+
+    // Example: You'd broadcast a damage event here
+    // this.sendNetworkBroadcastEvent(EventsService.CombatEvents.DealDamage, {
+    //   target: this.targetPlayer,
+    //   amount: this.currentDamage
+    // });
+  }
+
+  private updateLookAt() {
+    if (this.targetPlayer && this.state !== EnemyNPCState.Returning) {
+      this.lookAt = this.targetPlayer.position.get();
+    } else {
+      this.lookAt = undefined;
+    }
+  }
+
+  // ============== STATE TRANSITIONS ==============
+
   private onEnterState(state: EnemyNPCState) {
+    console.log(`[EnemyNPC] Entering state: ${EnemyNPCState[state]}`);
+
     switch (state) {
       case EnemyNPCState.Idle:
         this.navMeshAgent?.isImmobile.set(true);
         this.navMeshAgent?.destination.set(this.entity.position.get());
+        this.aggroLocation = undefined;
         break;
+
       case EnemyNPCState.Taunting:
-        this.stateTimer = EnemyNPC.tauntingAnimationDuration;
+        this.stateTimer = this.props.tauntDuration;
         this.navMeshAgent?.isImmobile.set(true);
         this.triggerEmoteAnimation(BaseNPCEmote.Taunt);
         break;
-      case EnemyNPCState.Walking:
+
+      case EnemyNPCState.Chasing:
         this.navMeshAgent?.isImmobile.set(false);
-        this.setMaxSpeedToWalkSpeed();
+        this.navMeshAgent?.maxSpeed.set(this.currentChaseSpeed);
         break;
-      case EnemyNPCState.Running:
-        this.navMeshAgent?.isImmobile.set(false);
-        this.setMaxSpeedToRunSpeed();
+
+      case EnemyNPCState.Attacking:
+        this.attackTimer = 0; // Attack immediately when entering state
+        this.navMeshAgent?.maxSpeed.set(0);
         break;
+
       case EnemyNPCState.Hit:
-        this.stateTimer = EnemyNPC.hitAnimationDuration;
-        this.navMeshAgent?.destination.set(this.entity.position.get());
+        this.stateTimer = this.props.hitAnimDuration;
         this.navMeshAgent?.isImmobile.set(true);
         break;
+
+      case EnemyNPCState.Returning:
+        this.navMeshAgent?.isImmobile.set(false);
+        this.navMeshAgent?.maxSpeed.set(this.props.returnSpeed);
+        this.targetPlayer = undefined;
+        break;
+
       case EnemyNPCState.Dead:
-        this.stateTimer = EnemyNPC.deathDuration;
+        this.stateTimer = this.props.deathDuration;
         this.dead = true;
+        this.navMeshAgent?.isImmobile.set(true);
         break;
     }
   }
 
   private onLeaveState(state: EnemyNPCState) {
     switch (state) {
-      case EnemyNPCState.Idle:
-        break;
-      case EnemyNPCState.Taunting:
-        break;
-      case EnemyNPCState.Walking:
-        break;
-      case EnemyNPCState.Running:
-        break;
-      case EnemyNPCState.Hit:
-        break;
       case EnemyNPCState.Dead:
+        // Reset on respawn
         this.dead = false;
         this.targetPlayer = undefined;
         this.lookAt = undefined;
+        this.players.clear();
         this.entity.position.set(this.startLocation);
-        this.hitPoints = EnemyNPC.maxHitPoints;
+        this.currentHitPoints = this.props.maxHitPoints;
         this.lastSwingData = null;
         this.activeSwings.clear();
         break;
@@ -400,63 +605,15 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   }
 
   private setState(state: EnemyNPCState) {
-    if (this.state != state) {
+    if (this.state !== state) {
       this.onLeaveState(this.state);
       this.state = state;
       this.onEnterState(this.state);
     }
   }
 
-  private updateWalkAndRunStates(deltaTime: number) {
-    if (this.targetPlayer === undefined) {
-      this.setState(EnemyNPCState.Idle);
-    } else {
-      this.navMeshAgent?.destination.set(this.targetPlayer.position.get());
-      const distanceToPlayer = this.targetPlayer.position.get().distanceSquared(this.entity.position.get());
-      if (distanceToPlayer < this.props.maxAttackDistance * this.props.maxAttackDistance) {
-        this.attackTimer -= deltaTime;
-        if (this.attackTimer <= 0) {
-          this.attackTimer = EnemyNPC.attackAnimationDuration;
-          console.log("Trigger attack animation");
-          this.triggerAttackAnimation();
-        }
-      }
-    }
-  }
-
-  private recieveDamage(amount: number) {
-    if (healthData.currentHealth <= 0) return;
-    healthData.currentHealth -= amount;
-    if (healthData.currentHealth < 0) healthData.currentHealth = 0;
-    const healthRatio = healthData.currentHealth / healthData.maxHealth;
-    healthData.healthValueBinding.set(healthRatio);
-    healthData.animationValueBinding.set(
-      Animation.timing(healthRatio, {
-        duration: 500,
-        easing: Easing.inOut(Easing.ease)
-      })
-    );
-  }
-
-  private handleDeath() {
-    // Destroy the Asset
-
-    this.setState(EnemyNPCState.Dead);
-    this.deathSfx?.play();
-    this.deathVfx?.play();
 
 
-    this.sendNetworkBroadcastEvent(EventsService.CombatEvents.NPCDeath, {
-      targetNpcId: this.entity.id.toString(),
-      enemyType: this.entity.name.get(),
-      killerPlayer: null,
-    });
-
-
-    this.async.setTimeout(() => {
-      this.world.deleteAsset(this.entity);
-    }, EnemyNPC.deathDuration * 1000);
-  }
 }
 hz.Component.register(EnemyNPC);
 

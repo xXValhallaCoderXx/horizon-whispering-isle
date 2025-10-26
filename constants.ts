@@ -12,7 +12,6 @@ export class EventsService {
     static readonly PlayerEvents = {
         OnPlayerStateLoaded: new LocalEvent<{ player: Player }>('player.on_player_state_loaded'),
         DisplayHealthHUD: new NetworkEvent<{ player: Player; currentHealth: number; maxHealth: number; name: string }>('player.display_health_hud'),
-
     }
 
     static readonly CameraEvents = {
@@ -20,7 +19,6 @@ export class EventsService {
     }
 
     static readonly QuestEvents = {
-
         QuestStarted: new LocalEvent<IQuestStarted>(), // Listen for when a new quest is started (Tutorial quest)
         DisplayQuestHUD: new NetworkEvent<IDisplayQuestHUD>("DisplayQuestHUD"), // Initiate showing the Quest HUD for a player
         RefreshQuestHUD: new NetworkEvent<IDisplayQuestHUD>("RefreshQuestHUD"), // Update the Quest HUD for a player
@@ -45,6 +43,11 @@ export class EventsService {
 
 
     static readonly CombatEvents = {
+        MonsterStartAttackingPlayer: new NetworkEvent<{ player: Player }>('combat.monster_start_attacking_player'),
+        MonsterStopAttackingPlayer: new NetworkEvent<{ player: Player }>('combat.monster_stop_attacking_player'),
+
+        // NOT YET UUSED
+
         AttackSwingEvent: new NetworkEvent<IAttackSwingPayload>('combat.attack_swing'),
         NPCDeath: new LocalEvent<INPCDeath>('combat.died'),
 
