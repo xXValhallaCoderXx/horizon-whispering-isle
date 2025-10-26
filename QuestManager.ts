@@ -15,6 +15,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     collectSound: { type: hz.PropTypes.Entity },
     // Optional: a ParticleGizmo entity to play when a quest item is collected
     collectVfx: { type: hz.PropTypes.Entity },
+    storageBagSpawnPoint: { type: hz.PropTypes.Entity },
   };
 
   preStart(): void {
@@ -226,6 +227,9 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
     if (objectiveProgress.isCompleted) {
       console.log(`[QuestManager] Objective already completed`);
+      if (entityId) {
+        this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { player, entityId });
+      }
       return false;
     }
 
@@ -251,6 +255,13 @@ class QuestManager extends hz.Component<typeof QuestManager> {
         objectiveProgress.isCompleted
       );
 
+      if (entityId) {
+        console.log(`[QuestManager] Sending destroy request for entityId=${entityId}`);
+        this.playCollectionSoundForPlayer(player, entityId);
+        this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+      }
+
+
       // Update HUD with simple format
       const objectiveText = this.getQuestObjectiveText(player, activeQuestId);
       this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, {
@@ -264,7 +275,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       // --- 5. Handle Objective Completion ---
       if (wasCompleted) {
         // Play sound and VFX
-        this.playCollectionSoundForPlayer(player, entityId);
+
         this.playCollectionVfxForPlayer(player, entityId);
 
         // Show completion popup
@@ -567,23 +578,16 @@ class QuestManager extends hz.Component<typeof QuestManager> {
         return;
       }
 
-      /** How far in front of the player to spawn the item (in meters). */
-      const ITEM_SPAWN_FORWARD_DISTANCE = 12.0;
-      /** How high up from the player's position to spawn the item (in meters). */
-      const ITEM_SPAWN_UP_OFFSET = 2.0;
+      const spawnPoint = this.props.storageBagSpawnPoint as hz.Entity | undefined;
+      if (!spawnPoint) {
+        console.warn('[QuestManager] storageBagSpawnPoint not set; cannot spawn bag.');
+        return;
+      }
 
-      // Bag spawn position
-      const playerPos = player.position.get();
-      const playerForward = player.forward.get();
 
-      // Normalize the forward vector on the XZ plane to prevent spawning up/down hills
-      const flatForward = new hz.Vec3(playerForward.x, 0, playerForward.z).normalize();
 
-      // Calculate the offset
-      const offset = flatForward.mul(ITEM_SPAWN_FORWARD_DISTANCE).add(new hz.Vec3(0, ITEM_SPAWN_UP_OFFSET, 0));
-
-      // Final spawn position
-      const spawnPos = playerPos.add(offset);
+      // Use the spawn point's position
+      const spawnPos = spawnPoint.position.get();
 
       const spawned = await this.world.spawnAsset(asset, spawnPos);
 

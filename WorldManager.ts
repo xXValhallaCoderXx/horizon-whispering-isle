@@ -8,6 +8,7 @@ class WorldManager extends Component<typeof WorldManager> {
     seawaveSound: { type: PropTypes.Entity },
     backgroundMusic: { type: PropTypes.Entity },
     playerStorageAsset: { type: PropTypes.Asset },
+    starterAxeAsset: { type: PropTypes.Asset },
     playerServiceAsset: { type: PropTypes.Entity },
     tutorialIslandSpawnPoint: { type: PropTypes.Entity },
     mainIslandSpawnPoint: { type: PropTypes.Entity },
@@ -46,17 +47,16 @@ class WorldManager extends Component<typeof WorldManager> {
     const inventoryDao = PlayerStateService.instance?.getInventoryDAO(player);
     const isStorageInitialized = inventoryDao?.getIsStorageBagAcquired();
     if (isStorageInitialized && this.props.playerStorageAsset) {
-      this.handleAttachAsset(player);
+      this.attachAsset(player, this.props.playerStorageAsset);
     }
     if (isTutorialComplete) {
       this.teleportPlayer(player, this.props.mainIslandSpawnPoint);
     } else {
       const questId = tutorialDao?.getActiveQuestId();
       const currentQuestIndex = tutorialDao?.getQuestStep(questId || "") || 0;
-      if (currentQuestIndex >= 3) {
-        // Spawn Axe for user
+      if (currentQuestIndex >= 3 && this.props.starterAxeAsset) {
+        this.attachAsset(player, this.props.starterAxeAsset);
       }
-      console.error("CURRENT QUEST INDEX: ", currentQuestIndex)
       this.teleportPlayer(player, this.props.tutorialIslandSpawnPoint);
     }
   }
@@ -65,8 +65,8 @@ class WorldManager extends Component<typeof WorldManager> {
     this.currentActivePlayers.delete(player);
   }
 
-  private async handleAttachAsset(player: Player) {
-    const asset = this.props.playerStorageAsset as Asset
+
+  private async attachAsset(player: Player, asset: Asset) {
     const spawnPosition = player.position.get();
     const spawnedEntities = await this.world.spawnAsset(asset, spawnPosition);
     const rootEntity = spawnedEntities[0];
@@ -78,7 +78,6 @@ class WorldManager extends Component<typeof WorldManager> {
     rootEntity.owner.set(player);
     rootEntity.visible.set(true);
     rootEntity.setVisibilityForPlayers([player], PlayerVisibilityMode.VisibleTo);
-
   }
 
   private teleportPlayer(player: Player, spawnPoint: Entity | null | undefined) {

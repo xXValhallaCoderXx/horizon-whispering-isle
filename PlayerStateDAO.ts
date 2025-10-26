@@ -10,7 +10,7 @@ export interface PlayerStateDaoState {
   level: number;
 }
 
-const PLAYER_STATE_DAO_DEFAULT_STATE: PlayerStateDaoState = {
+export const PLAYER_STATE_DAO_DEFAULT_STATE: PlayerStateDaoState = {
   health: 100,
   strength: 10,
   agility: 10,
