@@ -592,7 +592,10 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       const spawned = await this.world.spawnAsset(asset, spawnPos);
 
 
+
       const root = spawned?.[0];
+
+      this.sendNetworkEvent(player, EventsService.CameraEvents.PanToEntity, { player, entity: root, duration: 1500 });
       if (!root) return;
       // Prefer visible world spawn so player can pick it up
       root.visible.set(true);

@@ -58,6 +58,7 @@ class WorldManager extends Component<typeof WorldManager> {
         this.attachAsset(player, this.props.starterAxeAsset);
       }
       this.teleportPlayer(player, this.props.tutorialIslandSpawnPoint);
+
     }
   }
 

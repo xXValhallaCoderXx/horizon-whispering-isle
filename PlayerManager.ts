@@ -9,6 +9,7 @@ import { PlayerHealthHUD } from "PlayerHealthHUD";
 class PlayerManager extends hz.Component<typeof PlayerManager> {
   static propsDefinition = {
     playerHPGizmo: { type: hz.PropTypes.Entity },
+    playerCameraManager: { type: hz.PropTypes.Entity },
   };
 
   preStart(): void {
@@ -28,6 +29,7 @@ class PlayerManager extends hz.Component<typeof PlayerManager> {
 
     console.log(`[PlayerManager] Player ${player.id} entered world - Transfering Ownership.`);
     this?.props?.playerHPGizmo?.owner.set(player);
+    this?.props?.playerCameraManager?.owner.set(player);
     const playerDao = PlayerStateService.instance?.getPlayerDAO(player);
     const playerState = playerDao?.getState();
 

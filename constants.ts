@@ -14,6 +14,10 @@ export class EventsService {
         DisplayHealthHUD: new NetworkEvent<{ player: Player; currentHealth: number; maxHealth: number; name: string }>('player.display_health_hud'),
     }
 
+    static readonly CameraEvents = {
+        PanToEntity: new LocalEvent<IPanToEntityPayload>('player.pan_to_entity'),
+    }
+
     static readonly QuestEvents = {
 
         QuestStarted: new LocalEvent<IQuestStarted>(), // Listen for when a new quest is started (Tutorial quest)
@@ -365,3 +369,9 @@ export type IDisplayQuestHUD = {
 export type ISubmitQuestCollectProgress = {
     player: Player; itemId: string; amount: number; entityId?: string
 };
+
+export interface IPanToEntityPayload {
+    player: Player;
+    entity: Entity;
+    duration?: number;
+}
