@@ -18,7 +18,7 @@ const DIALOG_INTRO: Record<string, LocalNode> = {
     id: 'root',
     response: "Welcome! You're lucky you were brought ashore, the storm was rough. I can help you off here, interested?",
     options: [
-      { text: 'Yes (Continue)', next: 'interested' },
+      { text: 'Thanks! Yes', next: 'interested' },
       { text: 'Where am I?', next: 'where' },
     ],
   },
@@ -26,16 +26,16 @@ const DIALOG_INTRO: Record<string, LocalNode> = {
     id: 'where',
     response: 'This is Whispering Isle, we need help from people to help us.',
     options: [
-      { text: 'Yes (Continue)', next: 'interested' },
-      { text: 'No', close: true },
+      { text: 'I will help!', next: 'interested' },
+      { text: 'Not for me', close: true },
     ],
   },
   interested: {
     id: 'interested',
     response: "Great! We need some resources gathered, if you help me, I can get you off the island:",
     options: [
-      { text: 'Yes (Continue)', next: 'continued' },
-      { text: 'No', next: 'notReady' },
+      { text: 'Okay!', next: 'continued' },
+      { text: 'Not ready yet', next: 'notReady' },
     ],
   },
   notReady: {
@@ -45,61 +45,72 @@ const DIALOG_INTRO: Record<string, LocalNode> = {
       { text: 'OK', close: true },
     ],
   },
-  continued: { id: 'continued', response: 'Great! Collect 5 coconuts, and put them in the barrel next to me.', options: [{ text: 'OK', close: true }], startQuestOnEnter: TUTORIAL_QUEST_KEY },
+  continued: {
+    id: 'continued',
+    response: 'Great! First, grab that storage bag over there - you\'ll need it to carry supplies.',
+    options: [{ text: 'OK', close: true }],
+    startQuestOnEnter: TUTORIAL_QUEST_KEY
+  },
 };
 
-
-// Player has quest, needs to collect
-const DIALOG_STEP_1_COLLECT: Record<string, LocalNode> = {
+// Player has quest, needs to collect storage bag
+const DIALOG_STEP_1_COLLECT_BAG: Record<string, LocalNode> = {
   root: {
     id: 'root',
-    response: 'Bring me 5 coconuts and you can collect them in your new sack.',
+    response: 'Go ahead and grab that storage bag - you\'ll need it for collecting items.',
     options: [{ text: 'OK', close: true }],
   },
 };
 
-
-// Player has collected, needs to return
-const DIALOG_STEP_2_RETURN: Record<string, LocalNode> = {
+// Player has storage bag, now needs to collect coconuts
+const DIALOG_STEP_2_COLLECT_COCONUTS: Record<string, LocalNode> = {
   root: {
     id: 'root',
-    response: "You're back! And you have the coconuts! Great. Here's the Axe I promised. Now, use it to hunt 3 chickens.",
+    response: 'Great! Now bring me 2 coconuts and put them in the barrel next to me.',
+    options: [{ text: 'OK', close: true }],
+  },
+};
+
+// Player has collected coconuts, needs to return
+const DIALOG_STEP_3_RETURN_COCONUTS: Record<string, LocalNode> = {
+  root: {
+    id: 'root',
+    response: "You're back! And you have the coconuts! Great. Here's the Axe I promised. Now, use it to hunt 1 chicken.",
     options: [{ text: 'Thanks!', close: true }],
     questId: TUTORIAL_QUEST_KEY // This node will advance the quest
   },
 };
 
 // Player has quest, needs to hunt
-const DIALOG_STEP_3_KILL: Record<string, LocalNode> = {
+const DIALOG_STEP_4_KILL_CHICKENS: Record<string, LocalNode> = {
   root: {
     id: 'root',
-    response: "Go find 3 chickens and take them down with your Axe.",
+    response: "Go find 1 chicken and take it down with your Axe.",
     options: [{ text: 'On it!', close: true }],
   },
 };
 
-
 // Player has killed, needs to return
-const DIALOG_STEP_4_RETURN: Record<string, LocalNode> = {
+const DIALOG_STEP_5_RETURN_MEAT: Record<string, LocalNode> = {
   root: {
     id: 'root',
-    response: "Nice work with that axe. Just one last thing: bring me 5 logs.",
+    response: "Nice work with that axe. Just one last thing: bring me 10 logs.",
     options: [{ text: 'OK', close: true }],
     questId: TUTORIAL_QUEST_KEY // This node will advance the quest
   },
 };
 
 // Player has quest, needs to collect logs
-const DIALOG_STEP_5_COLLECT: Record<string, LocalNode> = {
+const DIALOG_STEP_6_COLLECT_LOGS: Record<string, LocalNode> = {
   root: {
     id: 'root',
-    response: "I still need those 5 logs to finish the repairs.",
+    response: "I still need those 10 logs to finish the repairs.",
     options: [{ text: 'Working on it!', close: true }],
   },
 };
 
 // Player has logs, needs to return
-const DIALOG_STEP_6_RETURN: Record<string, LocalNode> = {
+const DIALOG_STEP_7_RETURN_LOGS: Record<string, LocalNode> = {
   root: {
     id: 'root',
     response: "Perfect! That's everything. You've been a great help. You're free to go!",
@@ -112,7 +123,7 @@ const DIALOG_STEP_6_RETURN: Record<string, LocalNode> = {
 const DIALOG_COMPLETE: Record<string, LocalNode> = {
   root: {
     id: 'root',
-    response: "Well done — you’ve completed the tutorial quest! Thanks again for the help.",
+    response: "Well done — you've completed the tutorial quest! Thanks again for the help.",
     options: [{ text: 'You got it.', close: true }],
   },
 };
@@ -120,18 +131,20 @@ const DIALOG_COMPLETE: Record<string, LocalNode> = {
 
 function getTreeForStage(stage: TUTORIAL_QUEST_STAGES): Record<string, LocalNode> {
   switch (stage) {
-    case 'Step_1_Collect_Coconuts':
-      return DIALOG_STEP_1_COLLECT;
-    case 'Step_2_Return_Coconuts':
-      return DIALOG_STEP_2_RETURN;
-    case 'Step_3_Kill_Chickens':
-      return DIALOG_STEP_3_KILL;
-    case 'Step_4_Return_Meat':
-      return DIALOG_STEP_4_RETURN;
-    case 'Step_5_Collect_Logs':
-      return DIALOG_STEP_5_COLLECT;
-    case 'Step_6_Return_Logs':
-      return DIALOG_STEP_6_RETURN;
+    case 'Step_1_Collect_Bag':
+      return DIALOG_STEP_1_COLLECT_BAG;
+    case 'Step_2_Collect_Coconuts':
+      return DIALOG_STEP_2_COLLECT_COCONUTS;
+    case 'Step_3_Return_Coconuts':
+      return DIALOG_STEP_3_RETURN_COCONUTS;
+    case 'Step_4_Kill_Chickens':
+      return DIALOG_STEP_4_KILL_CHICKENS;
+    case 'Step_5_Return_Meat':
+      return DIALOG_STEP_5_RETURN_MEAT;
+    case 'Step_6_Collect_Logs':
+      return DIALOG_STEP_6_COLLECT_LOGS;
+    case 'Step_7_Return_Logs':
+      return DIALOG_STEP_7_RETURN_LOGS;
     case 'Complete':
       return DIALOG_COMPLETE;
     case 'NotStarted':

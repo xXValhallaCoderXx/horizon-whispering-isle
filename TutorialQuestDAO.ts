@@ -28,12 +28,13 @@ export interface ObjectiveProgress {
 
 export enum TUTORIAL_QUEST_STAGES {
   STAGE_NOT_STARTED = "NotStarted",
-  STAGE_STEP_1_COLLECT = "Step_1_Collect_Coconuts",
-  STAGE_STEP_2_RETURN_COCONUTS = "Step_2_Return_Coconuts",
-  STAGE_STEP_3_KILL = "Step_3_Kill_Chickens",
-  STAGE_STEP_4_RETURN_MEAT = "Step_4_Return_Meat",
-  STAGE_STEP_5_COLLECT = "Step_5_Collect_Logs",
-  STAGE_STEP_6_RETURN_LOGS = "Step_6_Return_Logs",
+  STAGE_STEP_1_COLLECT_BAG = "Step_1_Collect_Bag",
+  STAGE_STEP_2_COLLECT_COCONUTS = "Step_2_Collect_Coconuts",
+  STAGE_STEP_3_RETURN_COCONUTS = "Step_3_Return_Coconuts",
+  STAGE_STEP_4_KILL_CHICKENS = "Step_4_Kill_Chickens",
+  STAGE_STEP_5_RETURN_MEAT = "Step_5_Return_Meat",
+  STAGE_STEP_6_COLLECT_LOGS = "Step_6_Collect_Logs",
+  STAGE_STEP_7_RETURN_LOGS = "Step_7_Return_Logs",
   STAGE_COMPLETE = "Complete",
 }
 
@@ -69,10 +70,25 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     description: "Accept the tutorial quest",
     objectives: []
   },
-  [TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT]: {
-    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT,
+  [TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT_BAG]: {
+    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT_BAG,
     stepIndex: 1,
-    nextStepIndex: 2, // ADD THIS - advance to return stage
+    nextStepIndex: 2,
+    action: QuestStageAction.NONE,
+    description: "Collect the storage bag",
+    objectives: [
+      {
+        objectiveId: 'collect_storage_bag',
+        itemType: 'storage_bag',
+        targetCount: 1,
+        description: 'Pick up the storage bag'
+      }
+    ]
+  },
+  [TUTORIAL_QUEST_STAGES.STAGE_STEP_2_COLLECT_COCONUTS]: {
+    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_2_COLLECT_COCONUTS,
+    stepIndex: 2,
+    nextStepIndex: 3,
     action: QuestStageAction.NONE,
     description: "Collecting coconuts (in progress)",
     objectives: [
@@ -84,18 +100,18 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
       }
     ]
   },
-  [TUTORIAL_QUEST_STAGES.STAGE_STEP_2_RETURN_COCONUTS]: {
-    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_2_RETURN_COCONUTS,
-    stepIndex: 2,
-    nextStepIndex: 3,
+  [TUTORIAL_QUEST_STAGES.STAGE_STEP_3_RETURN_COCONUTS]: {
+    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_3_RETURN_COCONUTS,
+    stepIndex: 3,
+    nextStepIndex: 4,
     action: QuestStageAction.ADVANCE_QUEST,
     description: "Return coconuts and advance to kill chickens",
     objectives: []
   },
-  [TUTORIAL_QUEST_STAGES.STAGE_STEP_3_KILL]: {
-    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_3_KILL,
-    stepIndex: 3,
-    nextStepIndex: 4, // ADD THIS - advance to return stage
+  [TUTORIAL_QUEST_STAGES.STAGE_STEP_4_KILL_CHICKENS]: {
+    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_4_KILL_CHICKENS,
+    stepIndex: 4,
+    nextStepIndex: 5,
     action: QuestStageAction.NONE,
     description: "Killing chickens (in progress)",
     objectives: [
@@ -107,18 +123,18 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
       }
     ]
   },
-  [TUTORIAL_QUEST_STAGES.STAGE_STEP_4_RETURN_MEAT]: {
-    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_4_RETURN_MEAT,
-    stepIndex: 4,
-    nextStepIndex: 5,
+  [TUTORIAL_QUEST_STAGES.STAGE_STEP_5_RETURN_MEAT]: {
+    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_5_RETURN_MEAT,
+    stepIndex: 5,
+    nextStepIndex: 6,
     action: QuestStageAction.ADVANCE_QUEST,
     description: "Return meat and advance to collect logs",
     objectives: []
   },
-  [TUTORIAL_QUEST_STAGES.STAGE_STEP_5_COLLECT]: {
-    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_5_COLLECT,
-    stepIndex: 5,
-    nextStepIndex: 6, // ADD THIS - advance to return stage
+  [TUTORIAL_QUEST_STAGES.STAGE_STEP_6_COLLECT_LOGS]: {
+    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_6_COLLECT_LOGS,
+    stepIndex: 6,
+    nextStepIndex: 7,
     action: QuestStageAction.NONE,
     description: "Collecting logs (in progress)",
     objectives: [
@@ -130,10 +146,9 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
       }
     ]
   },
-  [TUTORIAL_QUEST_STAGES.STAGE_STEP_6_RETURN_LOGS]: {
-    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_6_RETURN_LOGS,
-    stepIndex: 6,
-    // NO nextStepIndex - this is the final stage before completion
+  [TUTORIAL_QUEST_STAGES.STAGE_STEP_7_RETURN_LOGS]: {
+    stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_7_RETURN_LOGS,
+    stepIndex: 7,
     action: QuestStageAction.COMPLETE_QUEST,
     description: "Return logs and complete quest",
     objectives: []

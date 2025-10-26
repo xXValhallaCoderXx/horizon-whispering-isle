@@ -62,6 +62,17 @@ class CollectibleStorage extends hz.Component<typeof CollectibleStorage> {
     // Optionally restrict future grabs to this player
     try { this.entity.as(hz.GrabbableEntity)?.setWhoCanGrab([player]); } catch { }
 
+    // Send quest progress event for collecting the storage bag
+    const rawId: any = (this.entity as any)?.id;
+    const entityId = typeof rawId === 'bigint' ? rawId.toString() : String(rawId);
+    console.log(
+      `[CollectibleStorage] - Player ${player.name.get()} collected storage bag (entityId=${entityId})`
+    );
+    this.sendNetworkBroadcastEvent(
+      EventsService.QuestEvents.SubmitQuestCollectProgress,
+      { player: player, itemId: 'storage_bag', amount: 1, entityId }
+    );
+
     // No legacy QuestItemCollected event; quest progress flows through SubmitQuestCollectProgress.
   }
 

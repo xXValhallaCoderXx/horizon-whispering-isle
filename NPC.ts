@@ -99,12 +99,13 @@ export class NPC extends hz.Component<typeof NPC> {
       case 'InProgress':
         // Map the numerical step to our stage strings
         switch (log.currentStepIndex) {
-          case 1: return TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT;
-          case 2: return TUTORIAL_QUEST_STAGES.STAGE_STEP_2_RETURN_COCONUTS;
-          case 3: return TUTORIAL_QUEST_STAGES.STAGE_STEP_3_KILL;
-          case 4: return TUTORIAL_QUEST_STAGES.STAGE_STEP_4_RETURN_MEAT;
-          case 5: return TUTORIAL_QUEST_STAGES.STAGE_STEP_5_COLLECT;
-          case 6: return TUTORIAL_QUEST_STAGES.STAGE_STEP_6_RETURN_LOGS;
+          case 1: return TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT_BAG;
+          case 2: return TUTORIAL_QUEST_STAGES.STAGE_STEP_2_COLLECT_COCONUTS;
+          case 3: return TUTORIAL_QUEST_STAGES.STAGE_STEP_3_RETURN_COCONUTS;
+          case 4: return TUTORIAL_QUEST_STAGES.STAGE_STEP_4_KILL_CHICKENS;
+          case 5: return TUTORIAL_QUEST_STAGES.STAGE_STEP_5_RETURN_MEAT;
+          case 6: return TUTORIAL_QUEST_STAGES.STAGE_STEP_6_COLLECT_LOGS;
+          case 7: return TUTORIAL_QUEST_STAGES.STAGE_STEP_7_RETURN_LOGS;
           default:
             // Failsafe, should not happen if logic is correct
             console.warn(`[NPC] Player is InProgress on quest but has unknown step: ${log.currentStepIndex}`);
@@ -131,7 +132,7 @@ export class NPC extends hz.Component<typeof NPC> {
 
     // Use a switch on the CURRENT step to decide the NEXT action.
     switch (currentStage) {
-      case TUTORIAL_QUEST_STAGES.STAGE_NOT_STARTED: // Player was "NotStarted" and just accepted the quest
+      case TUTORIAL_QUEST_STAGES.STAGE_NOT_STARTED:
         // Player just accepted the quest
         console.log(`[NPC] Starting quest '${TUTORIAL_QUEST_KEY}' for ${player.name.get()}`);
         this.playQuestAcceptedSound(player);
@@ -143,36 +144,41 @@ export class NPC extends hz.Component<typeof NPC> {
         });
         break;
 
-      case TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT:
-        // Player is currently collecting coconuts, they're just chatting
-        console.log(`[NPC] Player ${player.name.get()} is still on step 1 (collecting coconuts)`);
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT_BAG:
+        // Player is currently collecting storage bag, they're just chatting
+        console.log(`[NPC] Player ${player.name.get()} is still on step 1 (collecting storage bag)`);
         break;
 
-      case TUTORIAL_QUEST_STAGES.STAGE_STEP_2_RETURN_COCONUTS:
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_2_COLLECT_COCONUTS:
+        // Player is currently collecting coconuts, they're just chatting
+        console.log(`[NPC] Player ${player.name.get()} is still on step 2 (collecting coconuts)`);
+        break;
+
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_3_RETURN_COCONUTS:
         // Player is returning coconuts - manually advance and update HUD
         console.log(`[NPC] Player ${player.name.get()} turned in coconuts`);
         this.playQuestAcceptedSound(player);
 
         // Update the step in DAO
-        tutorialDao.updateQuestStep(TUTORIAL_QUEST_KEY, 3);
+        tutorialDao.updateQuestStep(TUTORIAL_QUEST_KEY, 4);
         this.sendLocalBroadcastEvent(EventsService.QuestEvents.RefreshQuestHUD, {
           player,
           questId: TUTORIAL_QUEST_KEY
         });
         break;
 
-      case TUTORIAL_QUEST_STAGES.STAGE_STEP_3_KILL:
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_4_KILL_CHICKENS:
         // Player is currently killing chickens, they're just chatting
-        console.log(`[NPC] Player ${player.name.get()} is still on step 3 (killing chickens)`);
+        console.log(`[NPC] Player ${player.name.get()} is still on step 4 (killing chickens)`);
         break;
 
-      case TUTORIAL_QUEST_STAGES.STAGE_STEP_4_RETURN_MEAT:
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_5_RETURN_MEAT:
         // Player is returning meat
         console.log(`[NPC] Player ${player.name.get()} turned in meat`);
         this.playQuestAcceptedSound(player);
 
         // Update the step in DAO
-        tutorialDao.updateQuestStep(TUTORIAL_QUEST_KEY, 5);
+        tutorialDao.updateQuestStep(TUTORIAL_QUEST_KEY, 6);
 
         // Tell QuestManager to refresh the HUD
         this.sendLocalBroadcastEvent(EventsService.QuestEvents.RefreshQuestHUD, {
@@ -181,12 +187,12 @@ export class NPC extends hz.Component<typeof NPC> {
         });
         break;
 
-      case TUTORIAL_QUEST_STAGES.STAGE_STEP_5_COLLECT:
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_6_COLLECT_LOGS:
         // Player is currently collecting logs, they're just chatting
-        console.log(`[NPC] Player ${player.name.get()} is still on step 5 (collecting logs)`);
+        console.log(`[NPC] Player ${player.name.get()} is still on step 6 (collecting logs)`);
         break;
 
-      case TUTORIAL_QUEST_STAGES.STAGE_STEP_6_RETURN_LOGS:
+      case TUTORIAL_QUEST_STAGES.STAGE_STEP_7_RETURN_LOGS:
         // Player is returning logs and completing the quest
         console.log(`[NPC] Player ${player.name.get()} turned in logs, completing quest`);
         this.playQuestAcceptedSound(player);
