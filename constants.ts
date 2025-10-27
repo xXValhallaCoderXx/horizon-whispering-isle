@@ -65,41 +65,10 @@ export class EventsService {
 }
 
 
-export const ITEMS = {
-    coconut: {
-        type: 'collectible',
-        label: 'Coconut',
-        description: "A tasty tropical fruit.",
-        spawnRate: 3000, // in milliseconds
-        rareSpawnRate: 0.1,
-        maxActive: 5,
-        maxActiveRares: 1,
-        spawnChance: 0.7,
-    },
-    ['enemy-chicken']: {
-        type: 'enemy-chicken',
-        label: 'Chicken',
-        description: "A feathery foe.",
-        spawnRate: 3000, // in milliseconds
-        rareSpawnRate: 0.1,
-        maxActive: 5,
-        maxActiveRares: 1,
-        spawnChance: 0.7,
-    }
-}
 
 
-export type CheckQuestSubmissionPayload = {
-    player: Player;
 
-    itemType: string;      // 'coconut', 'wood', etc.
-    amount: number;
-};
 
-export type QuestPayload = {
-    player: Player;
-    questId: string;
-};
 
 
 
@@ -165,13 +134,18 @@ export type INPCDeath = {
 
 
 
+export type CheckQuestSubmissionPayload = {
+    player: Player;
+    itemType: string;      // 'coconut', 'wood', etc.
+    amount: number;
+};
+
+export type QuestPayload = {
+    player: Player;
+    questId: string;
+};
 
 
-export enum QuestStatus {
-    NotStarted = 'NotStarted',
-    InProgress = 'InProgress',
-    Completed = 'Completed',
-}
 
 
 /* NEW TYPES */
@@ -228,3 +202,28 @@ export const MONSTERS: { [key: string]: MonsterConfigData } = {
     },
 
 };
+
+
+export const ITEMS = {
+    coconut: {
+        type: 'collectible',
+        label: 'Coconut',
+        description: "A tasty tropical fruit.",
+        spawnRate: 3000, // in milliseconds
+        rareSpawnRate: 0.1,
+        maxActive: 5,
+        maxActiveRares: 1,
+        spawnChance: 0.7,
+    },
+    ['enemy-chicken']: {
+        type: 'enemy-chicken',
+        label: 'Chicken',
+        description: "A feathery foe.",
+        spawnRate: 3000, // in milliseconds
+        rareSpawnRate: 0.1,
+        maxActive: 5,
+        maxActiveRares: 1,
+        spawnChance: 0.7,
+    }
+}
+

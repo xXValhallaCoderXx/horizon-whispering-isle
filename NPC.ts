@@ -209,7 +209,6 @@ export class NPC extends hz.Component<typeof NPC> {
           player,
           questId: TUTORIAL_QUEST_KEY
         });
-        this.world.ui.showPopupForPlayer(player, "Lets get ota haere!", 5);
         break;
 
       case TUTORIAL_QUEST_STAGES.STAGE_COMPLETE:

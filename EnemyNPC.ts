@@ -197,6 +197,29 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
       }
     );
 
+    // Listen for health updates from server
+    this.connectNetworkBroadcastEvent(
+      EventsService.CombatEvents.MonsterHealthUpdate,
+      (payload: { monsterId: string; currentHealth: number; maxHealth: number }) => {
+        const myId = this.entity.id.toString();
+        if (payload.monsterId === myId) {
+          this.currentHitPoints = payload.currentHealth;
+          console.log(`[EnemyNPC] Health updated: ${this.currentHitPoints}/${payload.maxHealth}`);
+        }
+      }
+    );
+
+    // Listen for death events from server
+    this.connectNetworkBroadcastEvent(
+      EventsService.CombatEvents.MonsterDied,
+      (payload: { monsterId: string; killerId?: string; position?: hz.Vec3 }) => {
+        const myId = this.entity.id.toString();
+        if (payload.monsterId === myId) {
+          this.handleDeath(payload.position);
+        }
+      }
+    );
+
     this.connectNetworkBroadcastEvent(StartAttackingPlayer, ({ player }) => {
       this.onPlayerEnterAggroRange(player);
     });
@@ -463,24 +486,33 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     const now = Date.now() / 1000.0;
     if (now < this.lastHitTime + this.props.hitAnimDuration) return;
 
-    this.currentHitPoints -= amount;
-    this.lastHitTime = now;
+    // this.currentHitPoints -= amount;
 
+    this.sendNetworkBroadcastEvent(EventsService.CombatEvents.MonsterTookDamage, {
+      monsterId: this.entity.id.toString(),
+      damage: amount,
+      attackerId: attacker.id.toString()
+    });
+
+    this.lastHitTime = now;
     this.hitSfx?.play();
     this.triggerHitAnimation();
     this.applyKnockback(attacker, this.props.knockbackForce);
 
-    console.error(`[EnemyNPC] Took ${amount} damage. HP: ${this.currentHitPoints}/${this.props.maxHitPoints}`);
+    // console.error(`[EnemyNPC] Took ${amount} damage. HP: ${this.currentHitPoints}/${this.props.maxHitPoints}`);
 
-    if (this.currentHitPoints <= 0) {
-      this.handleDeath();
-    } else {
-      this.setState(EnemyNPCState.Hit);
+    // if (this.currentHitPoints <= 0) {
+    //   this.handleDeath();
+    // } else {
+    //   this.setState(EnemyNPCState.Hit);
 
-      // Aggro the attacker if not already aggressive towards them
-      if (!this.players.has(attacker)) {
-        this.onPlayerEnterAggroRange(attacker);
-      }
+    //   // Aggro the attacker if not already aggressive towards them
+    //   if (!this.players.has(attacker)) {
+    //     this.onPlayerEnterAggroRange(attacker);
+    //   }
+    // }
+    if (!this.players.has(attacker)) {
+      this.onPlayerEnterAggroRange(attacker);
     }
   }
 
@@ -523,20 +555,21 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     }, 16);
   }
 
-  private handleDeath() {
+  private handleDeath(deathPosition?: hz.Vec3) {
     this.setState(EnemyNPCState.Dead);
-    this.deathSfx?.play();
-    this.deathVfx?.play();
+    console.error(`[EnemyNPC] NPC has died`);
 
-    this.sendNetworkBroadcastEvent(EventsService.CombatEvents.NPCDeath, {
-      targetNpcId: this.entity.id.toString(),
-      enemyType: this.entity.name.get(),
-      killerPlayer: this.targetPlayer as hz.Player,
-    });
+    // Use provided position if entity is already destroyed
 
-    this.async.setTimeout(() => {
-      this.world.deleteAsset(this.entity);
-    }, this.props.deathDuration * 1000);
+    if (this.deathSfx) {
+      this.deathSfx.play();
+      console.log(`[EnemyNPC] Playing death SFX`);
+    }
+
+    if (this.deathVfx) {
+      this.deathVfx.play();
+      console.log(`[EnemyNPC] Playing death VFX`);
+    }
   }
 
   // ============== STATE MACHINE ==============

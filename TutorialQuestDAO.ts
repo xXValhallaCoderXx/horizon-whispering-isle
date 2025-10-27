@@ -10,6 +10,20 @@ export interface QuestStepLog {
   done: boolean;
 }
 
+export enum QuestStatus {
+  NotStarted = 'NotStarted',
+  InProgress = 'InProgress',
+  Completed = 'Completed',
+}
+
+
+
+export enum QuestMessageDisplay {
+  None = 'none',           // Don't show any message
+  Popup = 'popup',         // Use showPopupForPlayer
+  InfoPanel = 'infopanel', // Use showInfoPanel (more detailed)
+}
+
 export interface QuestLog {
   questId: string;
   status: "InProgress" | "Completed" | "NotStarted";
@@ -59,6 +73,11 @@ export interface QuestStageConfig {
   action: QuestStageAction;
   description: string;
   objectives?: StageObjective[];  // NEW: What items/tasks are needed
+
+  displayType?: QuestMessageDisplay;      // How to show stage transition
+  displayDuration?: number;                // Duration in seconds (for popup)
+  infoPanelTitle?: string;                 // Title for info panel
+  infoPanelDescription?: string;
 }
 
 export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestStageConfig> = {
@@ -66,6 +85,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     stage: TUTORIAL_QUEST_STAGES.STAGE_NOT_STARTED,
     stepIndex: 0,
     nextStepIndex: 1,
+    displayType: QuestMessageDisplay.None,
     action: QuestStageAction.START_QUEST,
     description: "Accept the tutorial quest",
     objectives: []
@@ -74,6 +94,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_1_COLLECT_BAG,
     stepIndex: 1,
     nextStepIndex: 2,
+    displayType: QuestMessageDisplay.Popup,
     action: QuestStageAction.NONE,
     description: "Collect the storage bag",
     objectives: [
@@ -90,6 +111,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     stepIndex: 2,
     nextStepIndex: 3,
     action: QuestStageAction.NONE,
+    displayType: QuestMessageDisplay.None,
     description: "Collecting coconuts (in progress)",
     objectives: [
       {
@@ -105,6 +127,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     stepIndex: 3,
     nextStepIndex: 4,
     action: QuestStageAction.ADVANCE_QUEST,
+    displayType: QuestMessageDisplay.None,
     description: "Return coconuts and advance to kill chickens",
     objectives: [
       {
@@ -120,6 +143,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     stepIndex: 4,
     nextStepIndex: 5,
     action: QuestStageAction.NONE,
+    displayType: QuestMessageDisplay.None,
     description: "Killing chickens (in progress)",
     objectives: [
       {
@@ -135,6 +159,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     stepIndex: 5,
     nextStepIndex: 6,
     action: QuestStageAction.ADVANCE_QUEST,
+    displayType: QuestMessageDisplay.None,
     description: "Return meat and advance to collect logs",
     objectives: [{
       objectiveId: 'return_meat',
@@ -148,6 +173,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     stepIndex: 6,
     nextStepIndex: 7,
     action: QuestStageAction.NONE,
+    displayType: QuestMessageDisplay.None,
     description: "Collecting logs (in progress)",
     objectives: [
       {
@@ -162,6 +188,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     stage: TUTORIAL_QUEST_STAGES.STAGE_STEP_7_RETURN_LOGS,
     stepIndex: 7,
     action: QuestStageAction.COMPLETE_QUEST,
+    displayType: QuestMessageDisplay.None,
     description: "Return logs and complete quest",
     objectives: [{
       objectiveId: 'return_logs',
@@ -174,6 +201,7 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     stage: TUTORIAL_QUEST_STAGES.STAGE_COMPLETE,
     stepIndex: -1,
     action: QuestStageAction.NONE,
+    displayType: QuestMessageDisplay.None,
     description: "Quest already completed",
     objectives: []
   }

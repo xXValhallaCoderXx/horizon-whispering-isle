@@ -1,7 +1,7 @@
 import * as hz from 'horizon/core';
-import { EventsService, ISubmitQuestCollectProgress, QuestPayload, QuestStatus } from 'constants';
+import { EventsService, ISubmitQuestCollectProgress, QuestPayload } from 'constants';
 import { PlayerStateService } from 'PlayerStateService';
-import { TUTORIAL_QUEST_KEY } from 'TutorialQuestDAO';
+import { TUTORIAL_QUEST_KEY, QuestStatus, QuestMessageDisplay, QuestStageConfig } from 'TutorialQuestDAO';
 
 
 class QuestManager extends hz.Component<typeof QuestManager> {
@@ -101,7 +101,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     const stageConfig = questDAO.getStageByStepIndex(quest.currentStepIndex);
     if (stageConfig) {
       // Show transition message
-      this.world.ui.showPopupForPlayer(player, stageConfig.description, 4);
+      // this.world.ui.showPopupForPlayer(player, stageConfig.description, 4);
     }
 
     // Update HUD with new objective
@@ -171,7 +171,6 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     const questDAO = PlayerStateService.instance?.getTutorialDAO(player);
     if (!questDAO) {
       console.error(`[QuestManager] Could not get TutorialDAO for player ${player.name.get()}`);
-      this.world.ui.showPopupForPlayer(player, "Error: Could not access player quest data.", 3); // Native UI Popup
       return false;
     }
 
@@ -208,13 +207,8 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       return false;
     }
 
-    console.log("MATCHING OBJECTIVES: ", matchingObjectiveDef);
-
     if (!matchingObjectiveDef) {
-      console.log(`[QuestManager] No matching *collect* objectives for item '${itemId}' in quest '${activeQuestId}'.`);
-      // It's possible the item is for a different quest or not quest-related
-      // Only show popup if maybe expected? For now, just log.
-      // this.world.ui.showPopupForPlayer(player, `Cannot use '${itemId}' for the current quest objective.`, 3);
+      console.error(`[QuestManager] No matching *collect* objectives for item '${itemId}' in quest '${activeQuestId}'.`);
       return false;
     }
 
@@ -281,11 +275,12 @@ class QuestManager extends hz.Component<typeof QuestManager> {
         this.playCollectionVfxForPlayer(player, entityId);
 
         // Show completion popup
-        this.world.ui.showPopupForPlayer(
-          player,
-          `✓ ${matchingObjectiveDef.description}`,
-          3
-        );
+        // this.world.ui.showPopupForPlayer(
+        //   player,
+        //   `✓ ${matchingObjectiveDef.description}`,
+        //   3
+        // );
+        console.error(`[QuestManager] Objective completed popup for ${player.name.get()}: ${matchingObjectiveDef.description}`);
 
         // Check if all objectives in current stage are complete
         const allStageObjectivesComplete = stageConfig.objectives.every(
@@ -324,7 +319,6 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       console.error(`[QuestManager] Could not find stage config for step ${quest.currentStepIndex}`);
       return;
     }
-    console.error("ERROROR: ", currentStageConfig)
     // Check if there's a next step
     if (currentStageConfig.nextStepIndex === undefined || currentStageConfig.nextStepIndex === null) {
       console.log(`[QuestManager] No next step defined, quest complete`);
@@ -357,13 +351,9 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
     if (newStageConfig) {
       console.log(`[QuestManager] New stage: ${newStageConfig.description}`);
-
+      console.log("WTF WTF: ", newStageConfig.displayType)
       // Show stage transition message
-      this.world.ui.showPopupForPlayer(
-        player,
-        newStageConfig.description,
-        4
-      );
+      this.showQuestMessage(player, newStageConfig);
 
       // Update HUD with new objective
       const objectiveText = this.getQuestObjectiveText(player, questId);
@@ -522,6 +512,49 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
     // Simple format: "coconut 1/2"
     return `${stageObj.itemType} ${current}/${target}`;
+  }
+
+  private showQuestMessage(
+    player: hz.Player,
+    stageConfig: QuestStageConfig, // Use proper type from TutorialQuestDAO
+    fallbackMessage?: string
+  ): void {
+    try {
+      console.warn(`[QuestManager] Showing quest message to ${stageConfig}`);
+      const displayType = stageConfig.displayType || QuestMessageDisplay.Popup;
+
+      switch (displayType) {
+        case QuestMessageDisplay.None:
+          // Silent - don't show any message
+          console.log(`[QuestManager] Silent stage transition for ${player.name.get()}`);
+          break;
+
+        case QuestMessageDisplay.InfoPanel:
+          // Show detailed info panel
+          const title = stageConfig.infoPanelTitle || "Quest Update";
+          const description = stageConfig.infoPanelDescription || stageConfig.description;
+
+          // this.world.ui.s(
+          //   player,
+          //   title,
+          //   description
+          // );
+          console.log(`[QuestManager] Showing info panel to ${player.name.get()}: "${title}"`);
+          break;
+
+        case QuestMessageDisplay.Popup:
+        default:
+          // Show simple popup
+          const message = fallbackMessage || stageConfig.description;
+          const duration = stageConfig.displayDuration || 3;
+
+          this.world.ui.showPopupForPlayer(player, message, duration);
+          console.log(`[QuestManager] Showing popup to ${player.name.get()}: "${message}"`);
+          break;
+      }
+    } catch (error) {
+      console.error(`[QuestManager] Failed to show quest message for ${player.name.get()}:`, error);
+    }
   }
 
 }
