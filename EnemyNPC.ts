@@ -693,6 +693,11 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     if (!this.targetPlayer) return;
 
     console.log(`[EnemyNPC] Dealing ${this.currentDamage} damage to player`);
+    this.sendNetworkBroadcastEvent(EventsService.CombatEvents.PlayerTookDamage, {
+      player: this.targetPlayer,
+      damage: this.currentDamage,
+      monsterId: this.entity.id.toString()
+    });
   }
 
   private updateLookAt() {

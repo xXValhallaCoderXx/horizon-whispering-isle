@@ -40,6 +40,39 @@ export class PlayerStateDAO {
     }
   }
 
+  public getCurrentHealth(): number {
+    const state = this.getState();
+    return state.health;
+  }
+
+  public getMaxHealth(): number {
+    // For now, max health equals current health stat
+    // You may want to add a separate maxHealth field later
+    const state = this.getState();
+    return state.health;
+  }
+
+  public takeDamage(amount: number): number {
+    const state = this.getState();
+    const newHealth = Math.max(0, state.health - amount);
+    state.health = newHealth;
+    this.saveState(state);
+    return newHealth;
+  }
+
+  public heal(amount: number): number {
+    const state = this.getState();
+    const maxHealth = this.getMaxHealth();
+    const newHealth = Math.min(maxHealth, state.health + amount);
+    state.health = newHealth;
+    this.saveState(state);
+    return newHealth;
+  }
+
+  public isDead(): boolean {
+    return this.getCurrentHealth() <= 0;
+  }
+
   // --- PRIVATE UTILITIES (For Robustness and Efficiency) ---
   private saveState(state: PlayerStateDaoState): void {
     const serializedData = JSON.stringify(state);
