@@ -277,7 +277,7 @@ class EnemyNPCSpawnManager extends hz.Component<typeof EnemyNPCSpawnManager> {
       // Attempt cleanup anyway
     } else {
       // Broadcast death event BEFORE unloading
-      const deathPayload = { monsterId: idKey, killerId: killerId };
+      const deathPayload = { monsterId: idKey, killerId: killerId, monsterType: this.props.monsterType as string };
       this.sendNetworkBroadcastEvent(EventsService.CombatEvents.MonsterDied, deathPayload);
 
       // Un-index

@@ -1,5 +1,5 @@
 import { BaseWeapon } from 'BaseWeapon';
-import { Entity, Player, Vec3, LocalEvent, NetworkEvent } from 'horizon/core';
+import { Entity, Player, Vec3, LocalEvent, NetworkEvent, Asset } from 'horizon/core';
 
 
 export const INVENTORY_STATE_KEY = `player:inventory_state`;
@@ -40,7 +40,7 @@ export class EventsService {
 
     static readonly CombatEvents = {
         MonsterTookDamage: new NetworkEvent<{ monsterId: string; damage: number; attackerId?: string }>('combat.monster_took_damage'), // Player -> Server
-        MonsterDied: new NetworkEvent<{ monsterId: string; killerId?: string }>('combat.monster_died'), // Server -> All (if needed for quests)
+        MonsterDied: new NetworkEvent<{ monsterId: string; killerId?: string, monsterType: string }>('combat.monster_died'), // Server -> All (if needed for quests)
         MonsterHealthUpdate: new NetworkEvent<{ monsterId: string; currentHealth: number; maxHealth: number }>('combat.monster_health_update'), // Server -> All
 
         // NOT YET UUSED
@@ -187,7 +187,138 @@ export interface MonsterConfigData {
     rareChance: number; // 0..1
     commonStats: MonsterStats;
     rareStats: MonsterStats;
+    lootTable?: LootTableConfig;
 }
+
+export interface SpawnableItemConfig {
+    itemId: string;              // References ITEMS[itemId] for inventory
+    label: string;               // Display name
+    spawnRate: number;           // milliseconds between spawn attempts
+    spawnChance: number;         // 0..1 per attempt
+    maxActive: number;           // Max concurrent spawns
+    rareSpawnRate?: number;      // 0..1 chance for rare variant
+}
+
+export const SPAWNABLE_ITEMS: { [key: string]: SpawnableItemConfig } = {
+    coconut: {
+        itemId: 'coconut',       // Will add this to ITEMS
+        label: 'Coconut',
+        spawnRate: 3000,
+        spawnChance: 0.7,
+        maxActive: 5,
+        rareSpawnRate: 0.1
+    },
+    wood: {
+        itemId: 'wood',
+        label: 'Wood',
+        spawnRate: 5000,
+        spawnChance: 0.6,
+        maxActive: 8,
+        rareSpawnRate: 0.05
+    },
+    stone: {
+        itemId: 'stone',
+        label: 'Stone',
+        spawnRate: 4000,
+        spawnChance: 0.65,
+        maxActive: 6,
+        rareSpawnRate: 0.08
+    }
+};
+
+
+// export const ITEMS = {
+//     coconut: {
+//         type: 'collectible',
+//         label: 'Coconut',
+//         description: "A tasty tropical fruit.",
+//         spawnRate: 3000, // in milliseconds
+//         rareSpawnRate: 0.1,
+//         maxActive: 5,
+//         maxActiveRares: 1,
+//         spawnChance: 0.7,
+//     },
+//     ['enemy-chicken']: {
+//         type: 'enemy-chicken',
+//         label: 'Chicken',
+//         description: "A feathery foe.",
+//         spawnRate: 3000, // in milliseconds
+//         rareSpawnRate: 0.1,
+//         maxActive: 5,
+//         maxActiveRares: 1,
+//         spawnChance: 0.7,
+//     }
+// }
+
+
+
+export interface ItemConfig {
+    id: string;
+    label: string;
+    type: 'currency' | 'material' | 'collectible' | 'weapon' | 'consumable';
+    asset?: Asset;           // The spawnable asset reference
+    description?: string;
+    value?: number;         // For economy systems later
+}
+
+export enum ITEM_TYPES {
+    COIN = 'coin',
+    FEATHER = 'feather',
+    GEM_SMALL = 'gem_small',
+    CHICKEN_MEAT = 'chicken_meat'
+}
+
+export const ITEMS: { [key: string]: ItemConfig } = {
+    coin: {
+        id: ITEM_TYPES.COIN,
+        label: 'Gold Coin',
+        type: 'currency',
+        value: 1,
+        description: 'Shiny gold coin'
+    },
+    feather: {
+        id: ITEM_TYPES.FEATHER,
+        label: 'Chicken Feather',
+        type: 'material',
+        value: 5,
+        description: 'A soft feather from a defeated chicken'
+    },
+    gem_small: {
+        id: ITEM_TYPES.GEM_SMALL,
+        label: 'Small Gem',
+        type: 'collectible',
+        value: 25,
+        description: 'A small but precious gem'
+    },
+    chicken_meat: {
+        id: ITEM_TYPES.CHICKEN_MEAT,
+        label: 'Chicken Meat',
+        type: 'material',
+        value: 10,
+        description: 'A piece of raw chicken meat'
+    }
+};
+
+export interface LootTableEntry {
+    itemId: string;              // References ITEMS[itemId]
+    dropChance: number;          // 0.0 to 1.0 (e.g., 0.5 = 50% chance)
+    minQuantity?: number;        // Default: 1
+    maxQuantity?: number;        // Default: 1
+}
+
+export interface LootTableConfig {
+    dropMode: 'single' | 'multiple';  // 'single' = pick one, 'multiple' = roll each
+    entries: LootTableEntry[];
+
+    // Optional overrides
+    guaranteedDrops?: string[];       // ItemIds that always drop (quantity 1)
+    noDropChance?: number;            // For 'single' mode: explicit chance of no drop
+    scatterRadius?: number;           // Horizontal scatter range (default: 1.25m)
+    pluckHeight?: number;             // Vertical spawn offset (default: 0.5m)
+    autoDespawnSeconds?: number;      // Auto-cleanup time (default: 60s)
+    spawnCountCap?: number;           // Max items to spawn per kill (default: 12)
+}
+
 
 export const MONSTERS: { [key: string]: MonsterConfigData } = {
     CHICKEN: {
@@ -199,31 +330,20 @@ export const MONSTERS: { [key: string]: MonsterConfigData } = {
         rareChance: 0.1,
         commonStats: { health: 100, scale: Vec3.one },
         rareStats: { health: 500, scale: new Vec3(1.5, 1.5, 1.5) },
+        lootTable: {
+            dropMode: 'multiple',  // Roll each item independently
+            entries: [
+                { itemId: ITEM_TYPES.FEATHER, dropChance: 0.8, minQuantity: 1, maxQuantity: 2 },
+                { itemId: ITEM_TYPES.CHICKEN_MEAT, dropChance: 0.2, minQuantity: 1, maxQuantity: 1 },
+                { itemId: ITEM_TYPES.COIN, dropChance: 0.1, minQuantity: 1, maxQuantity: 1 },
+                { itemId: ITEM_TYPES.GEM_SMALL, dropChance: 0.05, minQuantity: 1, maxQuantity: 1 }
+            ],
+            guaranteedDrops: [],      // None for now
+            scatterRadius: 1.5,
+            pluckHeight: 0.5,
+            autoDespawnSeconds: 60,
+            spawnCountCap: 12
+        }
     },
 
 };
-
-
-export const ITEMS = {
-    coconut: {
-        type: 'collectible',
-        label: 'Coconut',
-        description: "A tasty tropical fruit.",
-        spawnRate: 3000, // in milliseconds
-        rareSpawnRate: 0.1,
-        maxActive: 5,
-        maxActiveRares: 1,
-        spawnChance: 0.7,
-    },
-    ['enemy-chicken']: {
-        type: 'enemy-chicken',
-        label: 'Chicken',
-        description: "A feathery foe.",
-        spawnRate: 3000, // in milliseconds
-        rareSpawnRate: 0.1,
-        maxActive: 5,
-        maxActiveRares: 1,
-        spawnChance: 0.7,
-    }
-}
-

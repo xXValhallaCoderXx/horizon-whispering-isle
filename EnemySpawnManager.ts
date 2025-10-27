@@ -284,7 +284,7 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
     } else {
       // Broadcast death event BEFORE unloading
       console.error(`[MonsterSpawnManager] Broadcasting death of Monster ID Key: ${idKey}`);
-      const deathPayload = { monsterId: idKey, killerId: killerId, position: deathPosition };
+      const deathPayload = { monsterId: idKey, killerId: killerId, position: deathPosition, monsterType: this.props.monsterType as string };
       this.sendNetworkBroadcastEvent(EventsService.CombatEvents.MonsterDied, deathPayload);
 
       // Un-index

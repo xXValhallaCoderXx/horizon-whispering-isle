@@ -22,9 +22,7 @@ class CollectableQuestItem extends hz.Component<typeof CollectableQuestItem> {
     console.log(`[CollectableQuestItem] - Emit Event: depositItemToPlayerInventory`);
 
     // Structured quest progress for QuestManager (local broadcast)
-    const id = (typeof this.props.itemId === 'string' && this.props.itemId.trim().length > 0)
-      ? this.props.itemId.trim()
-      : 'coconut';
+    const id = this.props.itemId.trim()
     const rawId: any = (this.entity as any)?.id;
     const entityId = typeof rawId === 'bigint' ? rawId.toString() : String(rawId);
 

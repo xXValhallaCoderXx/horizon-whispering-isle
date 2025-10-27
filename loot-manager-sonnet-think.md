@@ -1,5 +1,6 @@
 # LootDropManager Implementation Plan
 **Hackathon Scope: Stable, Flexible, Minimal-Effort**
+**Asset Strategy: Props match Item IDs (like EnemySpawnManager pattern)**
 
 ## 🎯 Goals
 
@@ -685,5 +686,174 @@ GOBLIN: {
 
 **Author**: Claude (Sonnet 4.5)  
 **Date**: 2025-10-27  
-**Version**: 1.0 - Hackathon Edition  
+**Version**: 2.0 - Props Edition  
 **Status**: Ready for Implementation ✨
+
+---
+
+## 📝 Quick Implementation Summary
+
+### Changes Needed:
+
+#### 1. **constants.ts** - Add Types & Config
+
+```typescript
+// Add these interfaces
+export interface ItemConfig {
+  id: string;
+  label: string;
+  type: 'currency' | 'material' | 'collectible' | 'weapon' | 'consumable';
+  description?: string;
+  baseValue?: number;
+}
+
+export interface LootTableEntry {
+  itemId: string;
+  dropChance: number;
+  minQuantity?: number;
+  maxQuantity?: number;
+}
+
+export interface LootTableConfig {
+  dropMode: 'single' | 'multiple';
+  entries: LootTableEntry[];
+  guaranteedDrops?: string[];
+  noDropChance?: number;
+  scatterRadius?: number;
+  pluckHeight?: number;
+  autoDespawnSeconds?: number;
+  spawnCountCap?: number;
+}
+
+// Add ITEMS map
+export const ITEMS: { [key: string]: ItemConfig } = {
+  coin: {
+    id: 'coin',
+    label: 'Gold Coin',
+    type: 'currency',
+    baseValue: 10,
+  },
+  feather: {
+    id: 'feather',
+    label: 'Chicken Feather',
+    type: 'material',
+    baseValue: 5,
+  },
+  gem_small: {
+    id: 'gem_small',
+    label: 'Small Gem',
+    type: 'collectible',
+    baseValue: 25,
+  },
+};
+
+// Update MonsterConfigData interface
+export interface MonsterConfigData {
+  type: string;
+  label: string;
+  spawnRate: number;
+  spawnChance: number;
+  maxActive: number;
+  rareChance: number;
+  commonStats: MonsterStats;
+  rareStats: MonsterStats;
+  lootTable?: LootTableConfig;  // ADD THIS LINE
+}
+
+// Update CHICKEN monster with loot table
+export const MONSTERS: { [key: string]: MonsterConfigData } = {
+  CHICKEN: {
+    type: "CHICKEN",
+    label: "Chicken",
+    spawnRate: 3000,
+    spawnChance: 0.8,
+    maxActive: 5,
+    rareChance: 0.1,
+    commonStats: { health: 100, scale: Vec3.one },
+    rareStats: { health: 500, scale: new Vec3(1.5, 1.5, 1.5) },
+    // ADD THIS LOOT TABLE
+    lootTable: {
+      dropMode: 'multiple',
+      entries: [
+        { itemId: 'feather', dropChance: 0.8, minQuantity: 1, maxQuantity: 3 },
+        { itemId: 'coin', dropChance: 0.3, minQuantity: 1, maxQuantity: 2 },
+        { itemId: 'gem_small', dropChance: 0.05, minQuantity: 1, maxQuantity: 1 },
+      ],
+      scatterRadius: 1.5,
+      pluckHeight: 0.5,
+      autoDespawnSeconds: 60,
+      spawnCountCap: 12,
+    },
+  },
+};
+```
+
+#### 2. **loot-drop-manager.ts** - Create New File
+
+See full implementation in the document above (Section: "Implementation: loot-drop-manager.ts")
+
+**Key points:**
+- Props: `coin`, `feather`, `gem_small` (match item IDs exactly)
+- `buildAssetRegistry()` maps itemId → prop asset
+- Listens to `EventsService.CombatEvents.MonsterDied`
+- Spawns items with physics at death position
+
+#### 3. **EnemySpawnManager.ts** - Optional Enhancement
+
+**Line 287** - Add `monsterType` to death payload:
+
+```typescript
+// BEFORE:
+const deathPayload = { 
+  monsterId: idKey, 
+  killerId: killerId, 
+  position: deathPosition 
+};
+
+// AFTER:
+const deathPayload = { 
+  monsterId: idKey, 
+  killerId: killerId, 
+  position: deathPosition,
+  monsterType: this.props.monsterType  // ADD THIS LINE
+};
+```
+
+#### 4. **Horizon Editor Setup**
+
+1. **Create loot item prefabs:**
+   - Coin prefab with `CollectableQuestItem` script (itemId: 'coin')
+   - Feather prefab with `CollectableQuestItem` script (itemId: 'feather')
+   - Gem prefab with `CollectableQuestItem` script (itemId: 'gem_small')
+
+2. **Add LootDropManager to scene:**
+   - Create empty entity named "LootDropManager"
+   - Set owner to **Server**
+   - Attach `loot-drop-manager.ts` script
+   - Assign props:
+     - `coin` → coin prefab asset
+     - `feather` → feather prefab asset  
+     - `gem_small` → gem prefab asset
+
+3. **Test:**
+   - Kill a chicken
+   - See items spawn and bounce
+   - Pick up items
+   - Verify auto-despawn after 60s
+
+---
+
+### Prop Naming Convention
+
+**Rule:** Prop name = Item ID from ITEMS config
+
+```
+ITEMS config:        LootDropManager props:
+─────────────        ─────────────────────
+coin          →      coin: { type: PropTypes.Asset }
+feather       →      feather: { type: PropTypes.Asset }
+gem_small     →      gem_small: { type: PropTypes.Asset }
+dragon_scale  →      dragon_scale: { type: PropTypes.Asset }
+```
+
+This keeps it simple and matches your EnemySpawnManager pattern! 🎯

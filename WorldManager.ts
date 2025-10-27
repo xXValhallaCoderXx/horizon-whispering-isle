@@ -55,7 +55,7 @@ class WorldManager extends Component<typeof WorldManager> {
     } else {
       const questId = tutorialDao?.getActiveQuestId();
       const currentQuestIndex = tutorialDao?.getQuestStep(questId || "") || 0;
-      if (currentQuestIndex >= 3 && this.props.starterAxeAsset) {
+      if (currentQuestIndex >= 0 && this.props.starterAxeAsset) {
         this.attachAsset(player, this.props.starterAxeAsset);
       }
       this.teleportPlayer(player, this.props.tutorialIslandSpawnPoint);

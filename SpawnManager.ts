@@ -1,16 +1,10 @@
 import * as hz from "horizon/core";
-import { ITEMS } from "constants";
+import { SPAWNABLE_ITEMS, SpawnableItemConfig } from "constants";
 import { EventsService } from "constants";
 
-interface ItemConfig {
-  asset: hz.Asset; // ✅ Normal version asset (has CollectibleItem script)
-  rareAsset?: hz.Asset; // ✅ Optional rare version asset
-  itemType: string; // 'Coconut', 'Wood', 'Stone', etc.
-  itemLabel: string; // Display name
-  spawnRate: number; // seconds between attempts
-  spawnChance: number; // 0..1 per attempt
-  maxActive: number; // capacity
-  rareChance?: number; // chance to use rareAsset
+interface SpawnManagerConfig extends SpawnableItemConfig {
+  asset: hz.Asset;              // Normal version asset (has CollectibleItem script)
+  rareAsset?: hz.Asset;         // Optional rare version asset
 }
 
 class SpawnManager extends hz.Component<typeof SpawnManager> {
@@ -21,9 +15,9 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
   };
 
   private spawnPoints: hz.Entity[] = [];
-  private activeItems: ItemSpawnController[] = [];
+  private activeSpawnControllers: ItemSpawnController[] = [];
   private timer: number = 0;
-  private spawnConfig: ItemConfig | undefined = undefined;
+  private spawnConfig: SpawnManagerConfig | undefined = undefined;
 
   // Mapping from entity id (string) -> controller. We normalize to string to handle bigint/number differences.
   private entityToController: Map<string, ItemSpawnController> = new Map();
@@ -41,16 +35,12 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
   preStart() {
     this.spawnPoints = this.findUnderContainer(this.entity, "SpawnLocations");
 
-    // TODO Listen to destroy assets and remove from activeItems and entityToController
+    // TODO Listen to destroy assets and remove from activeSPAWNABLE_ITEMS and entityToController
     this.connectNetworkBroadcastEvent(
       EventsService.AssetEvents.DestroyAsset,
       // Accept number|string for safety; we normalize internally.
       ({ entityId }: { entityId: any }) => this.onDestroyAssetRequest(entityId)
     );
-
-
-
-
 
 
     const commonAsset = this.props.commonAsset as hz.Asset | undefined;
@@ -61,57 +51,52 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
       return;
     }
 
-    const item = ITEMS[this.props.itemType as keyof typeof ITEMS];
+    const baseConfig = SPAWNABLE_ITEMS[this.props.itemType as keyof typeof SPAWNABLE_ITEMS];
+    if (!baseConfig) {
+      console.error(`[SpawnManager] Unknown itemType: ${this.props.itemType}`);
+      return;
+    }
 
+    // Merge with asset references
     this.spawnConfig = {
+      ...baseConfig,
       asset: commonAsset,
       rareAsset: this.props.rareAsset as hz.Asset | undefined,
-      itemType: item.type,
-      itemLabel: item.label,
-      spawnRate: item.spawnRate,
-      spawnChance: item.spawnChance,
-      maxActive: item.maxActive,
-      rareChance: item.rareSpawnRate || 0,
     };
   }
 
   start() {
-    this.startSpawnTimerForCoconuts()
+    this.startSpawnTimer()
 
   }
 
   // ---- Timers ----
-  private startSpawnTimerForCoconuts() {
-
+  private startSpawnTimer() {
     const tick = () => {
-      // console.log("[CollectibleSpawnManager] Spawn timer tick", this.spawnConfig);
       const cfg = this.spawnConfig;
       if (cfg) {
-        this.attemptSpawn(cfg, this.activeItems, cfg.itemLabel);
+        this.attemptSpawn(cfg, this.activeSpawnControllers, cfg.label);
       }
       const delayMs = this.spawnConfig?.spawnRate ?? 3000;
       this.timer = this.async.setTimeout(tick, delayMs);
     };
-
-    tick(); // immediate first attempt
+    tick();
   }
 
   // ---- Core spawn loop ----
   private attemptSpawn(
-    config: ItemConfig,
+    config: SpawnManagerConfig,
     activeList: ItemSpawnController[],
     label: string
   ) {
     this.cleanupInactiveControllers(activeList);
 
     if (activeList.length >= config.maxActive) {
-      // console.log(`[CollectibleSpawnManager] ${label} at capacity ${activeList.length}/${config.maxActive}`);
       return;
     }
 
     const roll = Math.random();
     if (roll > config.spawnChance) {
-      // console.log(`[CollectibleSpawnManager] ${label} spawn chance failed (${roll.toFixed(2)} > ${config.spawnChance})`);
       return;
     }
 
@@ -121,29 +106,10 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
     this.createAndSpawn(config, location, activeList, label);
   }
 
-  private findUnderContainer(
-    root: hz.Entity,
-    containerName: string
-  ): hz.Entity[] {
-    const containers = (root.children.get() || []).filter(
-      (e) => e.name.get() === containerName
-    );
-    if (containers.length === 0) return [];
-    const children: hz.Entity[] = [];
-    for (const c of containers) children.push(...(c.children.get() || []));
-    return children;
-  }
 
-  private cleanupInactiveControllers(activeList: ItemSpawnController[]) {
-    const stillActive = activeList.filter((c) => c.isSpawned);
-    if (stillActive.length !== activeList.length) {
-      activeList.length = 0;
-      activeList.push(...stillActive);
-    }
-  }
 
   private createAndSpawn(
-    config: ItemConfig,
+    config: SpawnManagerConfig,
     location: hz.Entity,
     activeList: ItemSpawnController[],
     label: string
@@ -155,8 +121,8 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
     // Pick normal vs rare
     const useRare =
       !!config.rareAsset &&
-      !!config.rareChance &&
-      Math.random() < config.rareChance;
+      !!config.rareSpawnRate &&
+      Math.random() < config.rareSpawnRate;
     const asset = useRare ? (config.rareAsset as hz.Asset) : config.asset;
 
     const controller = new hz.SpawnController(asset, position, rotation, scale);
@@ -188,8 +154,9 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
       });
   }
 
+
   private getAvailableSpawnLocation(): hz.Entity | null {
-    const locations = this.findUnderContainer(this.entity, "SpawnLocations");
+    const locations = this.spawnPoints
     if (locations.length === 0) return null;
 
     // shuffle
@@ -217,7 +184,7 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
       return d < radius;
     };
 
-    for (const c of this.activeItems) if (near(c)) return true;
+    for (const c of this.activeSpawnControllers) if (near(c)) return true;
     return false;
   }
 
@@ -250,15 +217,37 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
     }
 
     // Remove from active list
-    const idx = this.activeItems.indexOf(controller);
-    if (idx >= 0) this.activeItems.splice(idx, 1);
+    const idx = this.activeSpawnControllers.indexOf(controller);
+    if (idx >= 0) this.activeSpawnControllers.splice(idx, 1);
     // TODO - ADD A NICE CUSTOM UI HERE ON COLLECT 
 
 
     // Optionally trigger a spawn attempt now (capacity freed); or let the timer tick do it
     const cfg = this.spawnConfig;
     if (cfg) {
-      this.attemptSpawn(cfg, this.activeItems, cfg.itemLabel);
+      this.attemptSpawn(cfg, this.activeSpawnControllers, cfg.label);
+    }
+  }
+
+
+  private findUnderContainer(
+    root: hz.Entity,
+    containerName: string
+  ): hz.Entity[] {
+    const containers = (root.children.get() || []).filter(
+      (e) => e.name.get() === containerName
+    );
+    if (containers.length === 0) return [];
+    const children: hz.Entity[] = [];
+    for (const c of containers) children.push(...(c.children.get() || []));
+    return children;
+  }
+
+  private cleanupInactiveControllers(activeList: ItemSpawnController[]) {
+    const stillActive = activeList.filter((c) => c.isSpawned);
+    if (stillActive.length !== activeList.length) {
+      activeList.length = 0;
+      activeList.push(...stillActive);
     }
   }
 

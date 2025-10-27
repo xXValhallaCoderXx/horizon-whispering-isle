@@ -101,17 +101,6 @@ export class HealthBar extends UIComponent<typeof HealthBar> {
           console.log(`[HealthBar] No match found for Monster ID ${payload.monsterId}`);
         }
       });
-
-    // Listen for death events to hide the health bar
-    // this.connectNetworkBroadcastEvent(
-    //   EventsService.CombatEvents.MonsterDied,
-    //   (payload: { monsterId: string; killerId?: string; position?: hz.Vec3 }) => {
-    //     const parentEntity = this.entity.parent.get();
-    //     if (parentEntity && parentEntity.id.toString() === payload.monsterId) {
-    //       this.setVisible(false);
-    //     }
-    //   }
-    // );
   }
 
   /**
