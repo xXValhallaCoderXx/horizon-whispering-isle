@@ -182,7 +182,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       if (inventoryDAO && inventoryDAO.getIsStorageBagAcquired()) {
         inventoryDAO.addItem(itemId, amount);
         console.log(`[QuestManager] Added ${amount}x ${itemId} to inventory`);
-
+        console.error("ENTITY ID: ", entityId)
         // Play feedback
         if (entityId) {
           this.playCollectionSoundForPlayer(player, entityId);

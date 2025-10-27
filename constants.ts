@@ -334,8 +334,8 @@ export const MONSTERS: { [key: string]: MonsterConfigData } = {
         lootTable: {
             dropMode: 'multiple',  // Roll each item independently
             entries: [
-                { itemId: ITEM_TYPES.FEATHER, dropChance: 0.8, minQuantity: 1, maxQuantity: 2 },
-                { itemId: ITEM_TYPES.CHICKEN_MEAT, dropChance: 0.2, minQuantity: 1, maxQuantity: 1 },
+                { itemId: ITEM_TYPES.FEATHER, dropChance: 0.4, minQuantity: 1, maxQuantity: 2 },
+                { itemId: ITEM_TYPES.CHICKEN_MEAT, dropChance: 0.3, minQuantity: 1, maxQuantity: 1 },
                 { itemId: ITEM_TYPES.COIN, dropChance: 0.1, minQuantity: 1, maxQuantity: 1 },
                 { itemId: ITEM_TYPES.GEM_SMALL, dropChance: 0.05, minQuantity: 1, maxQuantity: 1 }
             ],

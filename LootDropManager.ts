@@ -23,9 +23,33 @@ class LootDropManager extends hz.Component<typeof LootDropManager> {
       EventsService.CombatEvents.MonsterDied,
       (payload) => this.onMonsterDeath(payload)
     );
+
+    this.connectNetworkBroadcastEvent(
+      EventsService.AssetEvents.DestroyAsset,
+      ({ entityId, player }: { entityId: any; player: hz.Player }) => {
+        this.onDestroyLootItem(entityId, player);
+      }
+    );
   }
 
+  private async onDestroyLootItem(entityId: any, player?: hz.Player) {
+    const key = typeof entityId === 'string' ? entityId :
+      typeof entityId === 'bigint' ? entityId.toString() :
+        String(entityId);
 
+    console.log(`[LootDropManager] Destroy request for loot item: ${key}`);
+
+    try {
+      const idBig = typeof entityId === 'bigint' ? entityId : BigInt(entityId);
+      const entity = new hz.Entity(idBig);
+
+      // Delete the entity
+      await this.world.deleteAsset(entity);
+      console.log(`[LootDropManager] Successfully destroyed loot item: ${key}`);
+    } catch (e) {
+      console.warn(`[LootDropManager] Failed to destroy entity ${key}:`, e);
+    }
+  }
 
 
   private onMonsterDeath(payload: {
@@ -154,8 +178,8 @@ class LootDropManager extends hz.Component<typeof LootDropManager> {
     centerPosition: hz.Vec3,
     config: LootTableConfig
   ) {
-    const scatterRadius = config.scatterRadius || 1.25;
-    const pluckHeight = config.pluckHeight || 0.5;
+    const scatterRadius = config.scatterRadius || 0.5; // Reduced from 1.25
+    const pluckHeight = config.pluckHeight || 0.3; // Reduced from 0.5
     const autoDespawn = config.autoDespawnSeconds || 60;
 
     // Random scatter position
@@ -189,23 +213,26 @@ class LootDropManager extends hz.Component<typeof LootDropManager> {
 
     const item = spawnedEntities[0];
 
-    // Disable collision briefly to avoid interpenetration
-    item.collidable.set(false);
+    // Ensure interaction mode is set
+    item.interactionMode.set(hz.EntityInteractionMode.Both);
+
+    // Keep collision enabled from the start
+    item.collidable.set(true);
 
     // Apply physics after short delay
     this.async.setTimeout(() => {
-      item.collidable.set(true);
-      item.interactionMode.set(hz.EntityInteractionMode.Both);
+
 
       const physicalItem = item.as(hz.PhysicalEntity);
       if (physicalItem) {
-        // Launch velocity (7-10 units, mostly horizontal + slight up)
-        const velocityMag = 7 + Math.random() * 3;
-        const velocity = new hz.Vec3(offsetX, 2, offsetZ).normalize().mul(velocityMag);
+        // Launch velocity (reduced to 3-5 units, less vertical)
+        const velocityMag = 3 + Math.random() * 2; // Reduced from 7-10
+        const velocity = new hz.Vec3(offsetX, 1, offsetZ).normalize().mul(velocityMag); // Reduced Y from 2 to 1
         physicalItem.applyForce(velocity, hz.PhysicsForceMode.VelocityChange);
 
-        // Angular velocity (spin)
-        const angularMag = 1 + Math.random() * 19;
+
+        // Angular velocity (spin) - reduced
+        const angularMag = 1 + Math.random() * 9; // Reduced from 1-20 to 1-10
         const torque = new hz.Vec3(
           (Math.random() - 0.5) * angularMag,
           (Math.random() - 0.5) * angularMag,
@@ -213,7 +240,7 @@ class LootDropManager extends hz.Component<typeof LootDropManager> {
         );
         physicalItem.applyTorque(torque);
       }
-    }, 200); // 200ms collision delay
+    }, 500); 
 
     // Auto-despawn
     this.async.setTimeout(() => {
@@ -252,9 +279,17 @@ class LootDropManager extends hz.Component<typeof LootDropManager> {
       return this.props.gem_small
     }
 
+    if (_item === ITEM_TYPES.CHICKEN_MEAT && this.props.chicken_meat) {
+      return this.props.chicken_meat
+    }
+
     return null
 
   }
 
 }
 hz.Component.register(LootDropManager);
+
+
+
+

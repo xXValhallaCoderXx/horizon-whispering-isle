@@ -493,3 +493,348 @@ public getState(): InventoryDaoState {
 - No changes to collection trigger components (CollectableQuestItem, CollectibleStorage) reduces risk
 - Quantity-based inventory enables future stacking, crafting, and economy features
 - Feedback parity ensures consistent player experience between quest turn-in and inventory collection
+
+---
+
+## 9) BUG ANALYSIS - Assets Not Being Destroyed
+
+### Problem Statement
+After implementing the inventory fallback (lines 178-198 and 222-242 in QuestManager.ts), items are being successfully collected into inventory BUT the assets are not being destroyed in the world.
+
+### Root Cause Analysis
+
+**Investigation findings:**
+
+1. **DestroyAsset event IS being sent correctly:**
+   - Line 189: `this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });`
+   - Line 233: `this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });`
+
+2. **SpawnManager IS listening to DestroyAsset:**
+   - Line 39-42 in SpawnManager.ts:
+   ```typescript
+   this.connectNetworkBroadcastEvent(
+     EventsService.AssetEvents.DestroyAsset,
+     ({ entityId }: { entityId: any }) => this.onDestroyAssetRequest(entityId)
+   );
+   ```
+
+3. **SpawnManager DOES handle destruction properly:**
+   - Lines 191-228 in SpawnManager.ts implement proper cleanup
+   - Uses entity-to-controller mapping to find and unload assets
+   - This works for quest turn-ins (as evidenced by existing behavior)
+
+### Potential Root Causes
+
+#### Hypothesis 1: Entity not tracked by SpawnManager
+**Symptoms:**
+- Items collected to inventory don't disappear
+- SpawnManager logs: `"Destroy request: unknown entityId="`
+
+**Possible reasons:**
+- The item being collected was NOT spawned by SpawnManager (e.g., manually placed in world editor)
+- The item was spawned by a different SpawnManager instance
+- The entityId indexing failed during spawn
+
+**Debug steps:**
+1. Check SpawnManager logs when collecting an item:
+   - Look for: `"[CollectibleSpawnManager] Destroy request for entityId=..."` (line 193)
+   - If followed by: `"Destroy request: unknown entityId="` (line 200), item isn't tracked
+
+2. Verify item was spawned by checking for:
+   - `"[CollectibleSpawnManager] Failed to spawn"` errors during spawn
+   - Whether the item has a CollectableQuestItem component properly configured
+
+**Fix if confirmed:**
+- Ensure all collectible items in the world are spawned via SpawnManager, not manually placed
+- OR: Add fallback destruction logic in CollectableQuestItem itself
+
+---
+
+#### Hypothesis 2: Timing/Race Condition
+**Symptoms:**
+- Intermittent success/failure
+- Some items destroy, others don't
+
+**Possible reasons:**
+- The DestroyAsset event is sent before the item is fully indexed in entityToController map
+- Network event race between spawn completion and collection attempt
+
+**Debug steps:**
+1. Add timing logs:
+   ```typescript
+   // In QuestManager inventory fallback
+   console.log(`[QuestManager] Sending DestroyAsset for entityId=${entityId} at ${Date.now()}`);
+   
+   // In SpawnManager.onDestroyAssetRequest
+   console.log(`[SpawnManager] Received DestroyAsset for entityId=${entityId} at ${Date.now()}`);
+   ```
+
+2. Check if events arrive out of order or are dropped
+
+**Fix if confirmed:**
+- Add async.setTimeout delay before sending DestroyAsset in inventory fallback path:
+  ```typescript
+  this.async.setTimeout(() => {
+    this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+  }, 100); // Small delay to ensure spawn indexing completes
+  ```
+
+---
+
+#### Hypothesis 3: Different SpawnManager Instance
+**Symptoms:**
+- Quest turn-ins work (items destroy)
+- Inventory collections don't work (items remain)
+
+**Possible reasons:**
+- Multiple SpawnManager components in the world for different item types
+- The coconut SpawnManager isn't receiving the event
+- Event broadcast scope issue
+
+**Debug steps:**
+1. Count how many SpawnManager instances exist:
+   ```typescript
+   // Add to SpawnManager.preStart()
+   console.log(`[SpawnManager] Instance created for itemType: ${this.props.itemType}`);
+   ```
+
+2. Verify which SpawnManager receives the destroy event:
+   ```typescript
+   // In SpawnManager.onDestroyAssetRequest
+   console.log(`[SpawnManager:${this.props.itemType}] Destroy request for entityId=${entityId}`);
+   ```
+
+**Fix if confirmed:**
+- Ensure DestroyAsset event is NetworkBroadcast (it is, per constants.ts line 32)
+- Check if event listeners are properly registered in all SpawnManager instances
+
+---
+
+#### Hypothesis 4: EntityId Format Mismatch
+**Symptoms:**
+- DestroyAsset event sent and received
+- SpawnManager can't find entity in map despite it being there
+
+**Possible reasons:**
+- EntityId passed as string vs bigint vs number
+- Key normalization failing
+
+**Debug steps:**
+1. Log entityId type and value at both send and receive:
+   ```typescript
+   // In QuestManager inventory fallback
+   console.log(`[QuestManager] DestroyAsset entityId type: ${typeof entityId}, value: ${entityId}`);
+   
+   // In SpawnManager.onDestroyAssetRequest
+   console.log(`[SpawnManager] Received entityId type: ${typeof entityId}, value: ${entityId}`);
+   console.log(`[SpawnManager] Normalized key: ${this.toIdKey(entityId)}`);
+   console.log(`[SpawnManager] Map has key: ${this.entityToController.has(this.toIdKey(entityId) || '')}`);
+   ```
+
+2. Dump all tracked entityIds:
+   ```typescript
+   console.log(`[SpawnManager] Tracked entityIds:`, Array.from(this.entityToController.keys()));
+   ```
+
+**Fix if confirmed:**
+- Ensure entityId extracted from CollectableQuestItem is consistent format:
+  ```typescript
+  // In CollectableQuestItem.ts
+  const rawId: any = (this.entity as any)?.id;
+  const entityId = typeof rawId === 'bigint' ? rawId.toString() : String(rawId);
+  ```
+
+---
+
+#### Hypothesis 5: Storage Bag Check Preventing Destruction
+**Symptoms:**
+- Inventory logs show "No storage bag" popup
+- Items NOT added to inventory
+- Items NOT destroyed
+
+**Possible reasons:**
+- Storage bag not acquired yet (lines 182, 226 check `getIsStorageBagAcquired()`)
+- If storage bag check fails, function returns early WITHOUT destroying asset
+
+**Debug steps:**
+1. Check if storage bag is acquired:
+   ```typescript
+   const inventoryDAO = PlayerStateService.instance?.getInventoryDAO(player);
+   console.log(`[QuestManager] Has storage bag: ${inventoryDAO?.getIsStorageBagAcquired()}`);
+   ```
+
+2. Look for "No storage bag" popup on screen
+
+**Fix if confirmed (MOST LIKELY CAUSE):**
+
+Current code (lines 182-196, 226-240):
+```typescript
+if (inventoryDAO && inventoryDAO.getIsStorageBagAcquired()) {
+  inventoryDAO.addItem(itemId, amount);
+  // ... play feedback and destroy ...
+} else {
+  this.world.ui.showPopupForPlayer(player, `No storage bag`, 2);
+}
+// ← BUG: Item NOT destroyed if no storage bag!
+return false;
+```
+
+**SOLUTION:** Always destroy the item, regardless of storage bag status:
+
+```typescript
+const inventoryDAO = PlayerStateService.instance?.getInventoryDAO(player);
+
+if (inventoryDAO && inventoryDAO.getIsStorageBagAcquired()) {
+  // Has storage bag - add to inventory
+  inventoryDAO.addItem(itemId, amount);
+  console.log(`[QuestManager] Added ${amount}x ${itemId} to inventory`);
+  this.world.ui.showPopupForPlayer(player, `Collected ${itemId}`, 2);
+} else {
+  // No storage bag - can't store item
+  console.log(`[QuestManager] No storage bag - item lost`);
+  this.world.ui.showPopupForPlayer(player, `Need storage bag to collect items`, 2);
+}
+
+// ALWAYS destroy the item (whether stored or not)
+if (entityId) {
+  this.playCollectionSoundForPlayer(player, entityId);
+  this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+}
+
+return false;
+```
+
+**Alternative:** Prevent collection attempt entirely if no storage bag:
+```typescript
+const inventoryDAO = PlayerStateService.instance?.getInventoryDAO(player);
+
+if (!inventoryDAO || !inventoryDAO.getIsStorageBagAcquired()) {
+  // Silently ignore - no storage bag
+  console.log(`[QuestManager] No storage bag - ignoring collection attempt`);
+  return false; // Don't destroy, leave item in world
+}
+
+// Has storage bag - proceed with collection
+inventoryDAO.addItem(itemId, amount);
+console.log(`[QuestManager] Added ${amount}x ${itemId} to inventory`);
+
+// Play feedback and destroy
+if (entityId) {
+  this.playCollectionSoundForPlayer(player, entityId);
+  this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+}
+
+this.world.ui.showPopupForPlayer(player, `Collected ${itemId}`, 2);
+return false;
+```
+
+---
+
+### Recommended Debugging Steps (Priority Order)
+
+1. **Check storage bag status** (Hypothesis 5 - Most likely)
+   - Look for "No storage bag" popup when collecting
+   - Add log: `console.log("Has bag:", inventoryDAO?.getIsStorageBagAcquired());`
+   - **Fix:** Move DestroyAsset outside the storage bag check
+
+2. **Verify entityId tracking** (Hypothesis 4)
+   - Add logs to compare entityId format at send vs receive
+   - Dump entityToController map keys
+   - **Fix:** Ensure consistent string conversion
+
+3. **Check if item spawned by SpawnManager** (Hypothesis 1)
+   - Look for "unknown entityId" in SpawnManager logs
+   - Verify items are spawned, not manually placed
+   - **Fix:** Ensure all items spawned via SpawnManager
+
+4. **Rule out timing issues** (Hypothesis 2)
+   - Check if events arrive in correct order
+   - **Fix:** Add small delay if needed
+
+5. **Verify event broadcast** (Hypothesis 3)
+   - Check all SpawnManager instances receive event
+   - **Fix:** Ensure proper event registration
+
+---
+
+### Quick Fix Recommendation
+
+**Most likely issue:** Storage bag check preventing destruction
+
+**Apply this change to QuestManager.ts immediately:**
+
+```typescript
+// Lines 178-198: No active quest fallback
+if (!activeQuestId) {
+  console.log(`[QuestManager] No active quest - attempting inventory collection`);
+  
+  const inventoryDAO = PlayerStateService.instance?.getInventoryDAO(player);
+  
+  if (inventoryDAO && inventoryDAO.getIsStorageBagAcquired()) {
+    inventoryDAO.addItem(itemId, amount);
+    console.log(`[QuestManager] Added ${amount}x ${itemId} to inventory`);
+    this.world.ui.showPopupForPlayer(player, `Collected ${itemId}`, 2);
+  } else {
+    console.log(`[QuestManager] No storage bag - item cannot be stored`);
+    this.world.ui.showPopupForPlayer(player, `Get storage bag first`, 2);
+  }
+  
+  // ALWAYS destroy item regardless of storage bag status
+  if (entityId) {
+    console.log(`[QuestManager] Destroying entityId=${entityId}`);
+    this.playCollectionSoundForPlayer(player, entityId);
+    this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+  }
+  
+  return false;
+}
+
+// Lines 222-242: Item not relevant for quest fallback
+if (!matchingObjectiveDef) {
+  console.log(`[QuestManager] Item '${itemId}' not needed - attempting inventory collection`);
+  
+  const inventoryDAO = PlayerStateService.instance?.getInventoryDAO(player);
+  
+  if (inventoryDAO && inventoryDAO.getIsStorageBagAcquired()) {
+    inventoryDAO.addItem(itemId, amount);
+    console.log(`[QuestManager] Added ${amount}x ${itemId} to inventory`);
+    this.world.ui.showPopupForPlayer(player, `Collected ${itemId}`, 2);
+  } else {
+    console.log(`[QuestManager] No storage bag - item cannot be stored`);
+    this.world.ui.showPopupForPlayer(player, `Get storage bag first`, 2);
+  }
+  
+  // ALWAYS destroy item regardless of storage bag status  
+  if (entityId) {
+    console.log(`[QuestManager] Destroying entityId=${entityId}`);
+    this.playCollectionSoundForPlayer(player, entityId);
+    this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+  }
+  
+  return false;
+}
+```
+
+**Key change:** Move the `DestroyAsset` event call OUTSIDE the storage bag check so items are always destroyed, whether they're stored in inventory or not.
+
+---
+
+### Testing After Fix
+
+**Expected behavior after applying fix:**
+
+1. **Without storage bag:**
+   - Press Index Down on item → Popup: "Get storage bag first" → Item disappears from world → Not in inventory
+
+2. **With storage bag:**
+   - Press Index Down on item → Popup: "Collected {itemId}" → Item disappears from world → Added to inventory
+
+3. **Quest turn-in (unchanged):**
+   - Press Index Down on quest item → Quest progress updates → Item disappears → Not in inventory
+
+**Verification checklist:**
+- [ ] Items always disappear after interaction (with or without storage bag)
+- [ ] Items only added to inventory if storage bag acquired
+- [ ] Quest turn-ins still work as before
+- [ ] No "unknown entityId" errors in SpawnManager logs
+- [ ] Sound/VFX plays correctly in all cases
