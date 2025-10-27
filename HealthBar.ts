@@ -74,21 +74,19 @@ export class HealthBar extends UIComponent<typeof HealthBar> {
     this.connectNetworkBroadcastEvent(
       EventsService.CombatEvents.MonsterHealthUpdate,
       (payload: { monsterId: string; currentHealth: number; maxHealth: number }) => {
-        console.error(`[HealthBar] Received health update for Monster ID ${payload.monsterId}: ${payload.currentHealth}/${payload.maxHealth}`);
+
         // Check if this update is for our parent entity
         const parentEntity = this.entity.parent.get();
-        console.error(`[HealthBar] Parent Entity ID: ${parentEntity ? parentEntity.id.toString() : 'none'}`);
-        console.log(`[HealthBar] Payload Monster ID: ${payload.monsterId}`);
+
         let currentEntity: Entity | null = this.entity;
         let matchFound = false;
 
         // Check up to 3 levels up in the hierarchy
         for (let i = 0; i < 3 && currentEntity; i++) {
           const entityId = currentEntity.id.toString();
-          console.error(`[HealthBar] Checking Entity ID at level ${i}: ${entityId}`);
+
 
           if (entityId === payload.monsterId) {
-            console.error(`[HealthBar] Match found! Updating health bar for Monster ID ${payload.monsterId}`);
             this.updateHealth(payload.currentHealth, payload.maxHealth);
             matchFound = true;
             break;
@@ -98,7 +96,7 @@ export class HealthBar extends UIComponent<typeof HealthBar> {
         }
 
         if (!matchFound) {
-          console.log(`[HealthBar] No match found for Monster ID ${payload.monsterId}`);
+          // console.log(`[HealthBar] No match found for Monster ID ${payload.monsterId}`);
         }
       });
   }

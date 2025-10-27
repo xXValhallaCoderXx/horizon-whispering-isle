@@ -211,9 +211,6 @@ class EnemyNPCSpawnManager extends hz.Component<typeof EnemyNPCSpawnManager> {
         this.entityToController.set(wrapper.monsterIdKey, wrapper); // Index by ID key
         // No need to index children unless they are independently targetable
 
-        console.log(
-          `[MonsterSpawnManager] Spawned ${useRare ? "RARE " : ""}${label} (HP: ${stats.health}). IDKey: ${wrapper.monsterIdKey}. Active=${activeList.length}/${config.maxActive}`
-        );
 
         // Broadcast initial health state to all clients
         this.broadcastHealthUpdate(wrapper);
@@ -251,7 +248,7 @@ class EnemyNPCSpawnManager extends hz.Component<typeof EnemyNPCSpawnManager> {
 
     if (controller.currentHealth <= 0) {
       const killerId = data.attackerId; // Get attacker ID from payload
-      console.log(`[MonsterSpawnManager] Monster ${key} killed by ${killerId || 'unknown'}`);
+
       // TODO: Grant quest credit/XP using killerId
       this.handleMonsterDeath(controller, killerId);
     }
@@ -313,7 +310,7 @@ class EnemyNPCSpawnManager extends hz.Component<typeof EnemyNPCSpawnManager> {
     if (!this.isOwnedByMe()) return;
 
     const playerName = (player as any)?.alias || 'Unknown';
-    console.log(`[MonsterSpawnManager] Player ${playerName} joined. Sending current monster states.`);
+
 
     // Send the current health of all active monsters ONLY to the new player
     for (const controller of this.activeMonsters) {
@@ -378,7 +375,7 @@ class EnemyNPCSpawnManager extends hz.Component<typeof EnemyNPCSpawnManager> {
     for (const loc of locations) {
       if (!this.isLocationOccupied(loc)) return loc;
     }
-    console.warn("[MonsterSpawnManager] No available spawn location found.");
+
     return null; // Explicitly return null if none found
   }
 

@@ -211,9 +211,7 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
         this.entityToController.set(wrapper.monsterIdKey, wrapper); // Index by ID key
         // No need to index children unless they are independently targetable
 
-        console.log(
-          `[MonsterSpawnManager] Spawned ${useRare ? "RARE " : ""}${label} (HP: ${stats.health}). IDKey: ${wrapper.monsterIdKey}. Active=${activeList.length}/${config.maxActive}`
-        );
+
 
         // Broadcast initial health state to all clients
         this.broadcastHealthUpdate(wrapper);
@@ -228,11 +226,9 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
   // ---- Combat Handlers (Server-Side) ----
 
   private onDamageRequest(data: { monsterId: string; damage: number; attackerId?: string }) {
-    console.log(`[MonsterSpawnManager] Damage request for Monster ID ${data.monsterId}: ${data.damage} damage from Attacker ID ${data.attackerId || 'unknown'}`);
+
     const key = this.toIdKey(data.monsterId);
 
-    console.error(`[MonsterSpawnManager] Processing damage for Monster ID Key: ${key}`);
-    console.log(`[MonsterSpawnManager] Processing damage for Monster ID Key (RAW): ${data.monsterId}`);
     if (!key) return;
 
     const controller = this.entityToController.get(key);
@@ -249,14 +245,13 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
 
     controller.currentHealth -= damageAmount;
     controller.currentHealth = Math.max(0, controller.currentHealth); // Clamp health at 0
-    console.log(`[MonsterSpawnManager] Monster ${key} took ${damageAmount} damage, current health: ${controller.currentHealth}/${controller.maxHealth}`);
+
     // Broadcast the health update to ALL players
     this.broadcastHealthUpdate(controller);
 
     if (controller.currentHealth <= 0) {
       const killerId = data.attackerId; // Get attacker ID from payload
-      console.error(`[MonsterSpawnManager] Monster ${key} killed by ${killerId || 'unknown'}`);
-      console.log(`[MonsterSpawnManager] Monster ${key} killed by ${killerId || 'unknown'}`);
+
       // TODO: Grant quest credit/XP using killerId
       this.handleMonsterDeath(controller, killerId);
     }
@@ -323,7 +318,7 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
     if (!this.isOwnedByMe()) return;
 
     const playerName = (player as any)?.alias || 'Unknown';
-    console.log(`[MonsterSpawnManager] Player ${playerName} joined. Sending current monster states.`);
+
 
     // Send the current health of all active monsters ONLY to the new player
     for (const controller of this.activeMonsters) {

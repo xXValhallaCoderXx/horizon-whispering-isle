@@ -176,9 +176,25 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
     const activeQuestId = questDAO.getActiveQuestId();
     if (!activeQuestId) {
-      console.log(`[QuestManager] No active quest found for player ${player.name.get()}`);
-    // Don't show popup here - player might just not have a quest active
-      return false;
+      console.log(`[QuestManager] No active quest - adding to inventory instead`);
+      // ← NEW: Add to inventory fallback
+      const inventoryDAO = PlayerStateService.instance?.getInventoryDAO(player);
+      if (inventoryDAO && inventoryDAO.getIsStorageBagAcquired()) {
+        inventoryDAO.addItem(itemId, amount);
+        console.log(`[QuestManager] Added ${amount}x ${itemId} to inventory`);
+
+        // Play feedback
+        if (entityId) {
+          this.playCollectionSoundForPlayer(player, entityId);
+          this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+        }
+
+        // Optional: show popup
+        this.world.ui.showPopupForPlayer(player, `Collected ${itemId}`, 2);
+      } else {
+        this.world.ui.showPopupForPlayer(player, `No storage bag`, 2);
+      }
+      return false; // Still return false for quest purposes, but item was collected
     }
 
     console.log("ACTIVE Quest ID: ", activeQuestId);
@@ -202,13 +218,26 @@ class QuestManager extends hz.Component<typeof QuestManager> {
     const matchingObjectiveDef = stageConfig.objectives.find(
       obj => obj.itemType === itemId
     );
-    if (!matchingObjectiveDef) {
-      console.log(`[QuestManager] Item '${itemId}' is not relevant for current quest step`);
-      return false;
-    }
 
     if (!matchingObjectiveDef) {
-      console.error(`[QuestManager] No matching *collect* objectives for item '${itemId}' in quest '${activeQuestId}'.`);
+      console.log(`[QuestManager] Item '${itemId}' not needed for quest - adding to inventory`);
+      // ← NEW: Add to inventory fallback
+      const inventoryDAO = PlayerStateService.instance?.getInventoryDAO(player);
+      if (inventoryDAO && inventoryDAO.getIsStorageBagAcquired()) {
+        inventoryDAO.addItem(itemId, amount);
+        console.log(`[QuestManager] Added ${amount}x ${itemId} to inventory`);
+
+        // Play feedback
+        if (entityId) {
+          this.playCollectionSoundForPlayer(player, entityId);
+          this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+        }
+
+        // Optional: show popup
+        this.world.ui.showPopupForPlayer(player, `Collected ${itemId}`, 2);
+      } else {
+        this.world.ui.showPopupForPlayer(player, `No storage bag`, 2);
+      }
       return false;
     }
 

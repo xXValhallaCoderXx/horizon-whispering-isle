@@ -148,9 +148,9 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     objectives: [
       {
         objectiveId: 'hunt_chicken',
-        itemType: 'chicken',
-        targetCount: 1,
-        description: 'Hunt 1 chicken for meat'
+        itemType: 'chicken_meat',
+        targetCount: 3,
+        description: 'Hunt 3 chicken for meat'
       }
     ]
   },

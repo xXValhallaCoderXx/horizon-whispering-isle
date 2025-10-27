@@ -89,6 +89,7 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
     activeList: ItemSpawnController[],
     label: string
   ) {
+
     this.cleanupInactiveControllers(activeList);
 
     if (activeList.length >= config.maxActive) {
@@ -96,11 +97,13 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
     }
 
     const roll = Math.random();
+
     if (roll > config.spawnChance) {
       return;
     }
 
     const location = this.getAvailableSpawnLocation();
+
     if (!location) return;
 
     this.createAndSpawn(config, location, activeList, label);
@@ -139,12 +142,7 @@ class SpawnManager extends hz.Component<typeof SpawnManager> {
         }
 
         const p = wrapper.spawnPosition!;
-        console.log(
-          `[CollectibleSpawnManager] Spawned ${useRare ? "RARE " : ""
-          }${label} at (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(
-            1
-          )})  Active=${activeList.length}/${config.maxActive}`
-        );
+
       })
       .catch((e) => {
         console.error("[CollectibleSpawnManager] Failed to spawn", label, e);

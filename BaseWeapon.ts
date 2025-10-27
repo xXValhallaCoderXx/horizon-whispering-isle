@@ -93,9 +93,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
   // ** ADD THIS: Pass input to components **
   private onFirePressed(player: Player) {
     if (!this.isHeld()) return;
-    console.log(
-      `[BaseWeapon] onFirePressed called by player ${player.name.get()}`
-    );
+
     this.entity.owner
       .get()
       .playAvatarGripPoseAnimationByName(AvatarGripPoseAnimationNames.Fire);

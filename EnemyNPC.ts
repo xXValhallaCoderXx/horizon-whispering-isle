@@ -247,7 +247,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
    */
   public setAttackSpeed(cooldown: number) {
     this.currentAttackCooldown = Math.max(0.5, cooldown);
-    console.log(`[EnemyNPC] Attack cooldown set to ${this.currentAttackCooldown}s`);
+
   }
 
   /**
@@ -258,7 +258,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     if (this.state === EnemyNPCState.Chasing) {
       this.navMeshAgent?.maxSpeed.set(this.currentChaseSpeed);
     }
-    console.log(`[EnemyNPC] Chase speed set to ${this.currentChaseSpeed}`);
+
   }
 
   /**
@@ -266,7 +266,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
    */
   public setDamage(damage: number) {
     this.currentDamage = Math.max(1, damage);
-    console.log(`[EnemyNPC] Damage set to ${this.currentDamage}`);
+
   }
 
   /**
@@ -281,7 +281,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
         this.setState(EnemyNPCState.Returning);
       }
     }
-    console.log(`[EnemyNPC] Aggressive mode: ${aggressive}`);
+
   }
 
   /**
@@ -295,7 +295,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     } else if (!roaming && this.state === EnemyNPCState.Patrolling) {
       this.setState(EnemyNPCState.Idle);
     }
-    console.log(`[EnemyNPC] Roaming mode: ${roaming}`);
+
   }
 
   /**
@@ -306,7 +306,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
       this.currentHitPoints + amount,
       this.props.maxHitPoints
     );
-    console.log(`[EnemyNPC] Healed ${amount}. HP: ${this.currentHitPoints}/${this.props.maxHitPoints}`);
+
   }
 
   // ============== AGGRO SYSTEM ==============
@@ -557,18 +557,18 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
 
   private handleDeath(deathPosition?: hz.Vec3) {
     this.setState(EnemyNPCState.Dead);
-    console.error(`[EnemyNPC] NPC has died`);
+
 
     // Use provided position if entity is already destroyed
 
     if (this.deathSfx) {
       this.deathSfx.play();
-      console.log(`[EnemyNPC] Playing death SFX`);
+
     }
 
     if (this.deathVfx) {
       this.deathVfx.play();
-      console.log(`[EnemyNPC] Playing death VFX`);
+
     }
   }
 
@@ -713,7 +713,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   // ============== STATE TRANSITIONS ==============
 
   private onEnterState(state: EnemyNPCState) {
-    console.log(`[EnemyNPC] Entering state: ${EnemyNPCState[state]}`);
+
 
     switch (state) {
       case EnemyNPCState.Idle:
