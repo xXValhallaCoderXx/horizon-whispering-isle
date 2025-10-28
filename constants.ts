@@ -42,7 +42,7 @@ export class EventsService {
         PlayerTookDamage: new NetworkEvent<{ player: Player; damage: number; monsterId?: string }>('combat.player_took_damage'), // Server -> Player
         MonsterTookDamage: new NetworkEvent<{ monsterId: string; damage: number; attackerId?: string }>('combat.monster_took_damage'), // Player -> Server
         MonsterDied: new NetworkEvent<{ monsterId: string; killerId?: string, monsterType: string }>('combat.monster_died'), // Server -> All (if needed for quests)
-        MonsterHealthUpdate: new NetworkEvent<{ monsterId: string; currentHealth: number; maxHealth: number }>('combat.monster_health_update'), // Server -> All
+        MonsterHealthUpdate: new NetworkEvent<{ monsterId: string; currentHealth: number; maxHealth: number, visible: boolean }>('combat.monster_health_update'), // Server -> All
 
         // NOT YET UUSED
         AttackSwingEvent: new NetworkEvent<IAttackSwingPayload>('combat.attack_swing'),

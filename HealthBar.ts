@@ -1,5 +1,4 @@
 import { EventsService } from "constants";
-import { healthData } from "HealthData";
 import { Entity } from "horizon/core";
 import { UIComponent, View, Text, UINode, Binding, AnimatedBinding, Animation, Easing } from "horizon/ui";
 
@@ -12,7 +11,7 @@ export class HealthBar extends UIComponent<typeof HealthBar> {
 
   initializeUI() {
     return UINode.if(
-      healthData.isVisible,
+      this.isVisibleBinding,
       View({
         children: [
           // Progress bar container
@@ -32,7 +31,7 @@ export class HealthBar extends UIComponent<typeof HealthBar> {
                 style: {
                   height: '100%',
                   backgroundColor: 'lightgreen',
-                  width: healthData.animationValueBinding.interpolate([0, 1], ['0%', '100%']),
+                  width: this.hpFillBinding.interpolate([0, 1], ['0%', '100%']),
                   borderRadius: 5
                 }
               })
@@ -49,7 +48,7 @@ export class HealthBar extends UIComponent<typeof HealthBar> {
                   fontWeight: 'bold',
                   textAlign: 'center'
                 },
-                text: healthData.healthValueBinding.derive(v => `${Math.round(v * healthData.maxHealth)}/${healthData.maxHealth}`),
+                text: this.hpTextBinding,
               })
             ],
             style: {
@@ -71,13 +70,12 @@ export class HealthBar extends UIComponent<typeof HealthBar> {
 
   start() {
     // Listen for health updates from the server
+    // Listen for health updates from the server
     this.connectNetworkBroadcastEvent(
       EventsService.CombatEvents.MonsterHealthUpdate,
-      (payload: { monsterId: string; currentHealth: number; maxHealth: number }) => {
+      (payload: { monsterId: string; currentHealth: number; maxHealth: number; visible?: boolean }) => {
 
         // Check if this update is for our parent entity
-        const parentEntity = this.entity.parent.get();
-
         let currentEntity: Entity | null = this.entity;
         let matchFound = false;
 
@@ -85,18 +83,19 @@ export class HealthBar extends UIComponent<typeof HealthBar> {
         for (let i = 0; i < 3 && currentEntity; i++) {
           const entityId = currentEntity.id.toString();
 
-
           if (entityId === payload.monsterId) {
             this.updateHealth(payload.currentHealth, payload.maxHealth);
+
+            // Update visibility if specified in payload
+            if (payload.visible !== undefined) {
+              this.setVisible(payload.visible);
+            }
+
             matchFound = true;
             break;
           }
 
           currentEntity = currentEntity.parent.get();
-        }
-
-        if (!matchFound) {
-          // console.log(`[HealthBar] No match found for Monster ID ${payload.monsterId}`);
         }
       });
   }

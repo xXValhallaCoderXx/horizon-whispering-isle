@@ -714,7 +714,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
 
   private onEnterState(state: EnemyNPCState) {
 
-
+    this.updateHealthBarVisibility(state);
     switch (state) {
       case EnemyNPCState.Idle:
         this.navMeshAgent?.isImmobile.set(true);
@@ -762,6 +762,30 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
         this.navMeshAgent?.isImmobile.set(true);
         break;
     }
+  }
+
+  /**
+ * Updates health bar visibility based on combat state
+ */
+  private updateHealthBarVisibility(state: EnemyNPCState) {
+    const combatStates = [
+      EnemyNPCState.Taunting,
+      EnemyNPCState.Chasing,
+      EnemyNPCState.Attacking,
+      EnemyNPCState.Hit,
+    ];
+
+    const shouldShow = combatStates.includes(state);
+
+    this.sendNetworkBroadcastEvent(
+      EventsService.CombatEvents.MonsterHealthUpdate,
+      {
+        monsterId: this.entity.id.toString(),
+        currentHealth: this.currentHitPoints,
+        maxHealth: this.props.maxHitPoints,
+        visible: shouldShow
+      }
+    );
   }
 
   private onLeaveState(state: EnemyNPCState) {
