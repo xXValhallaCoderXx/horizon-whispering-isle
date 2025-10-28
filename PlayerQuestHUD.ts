@@ -1,4 +1,4 @@
-import { PropTypes, Player } from "horizon/core";
+import { PropTypes, Player, PlayerInput, SerializableState, PlayerControls, PlayerInputAction, ButtonIcon, ButtonPlacement } from "horizon/core";
 import { EventsService } from "constants";
 import {
   UIComponent,
@@ -10,7 +10,7 @@ import {
   Image,
   ImageSource,
   Binding,
-  UINode,
+  UINode
 } from "horizon/ui";
 
 class PlayerQuestHUD extends UIComponent {
@@ -19,9 +19,32 @@ class PlayerQuestHUD extends UIComponent {
   };
 
   private titleTextBinding = new Binding<string>("");
-  private isVisibleBinding = new Binding<boolean>(false); // This controls visibility
   private objectiveTextBinding = new Binding<string>("");
+  private finalVisibilityBinding = new Binding<boolean>(false);
 
+  // Track state with regular variables instead of bindings for logic
+  private questActive: boolean = false;
+  private userWantsVisible: boolean = true;
+
+  toggleDebugQuest: PlayerInput | undefined = undefined;
+
+  receiveOwnership(_serializableState: SerializableState, _oldOwner: Player, _newOwner: Player): void {
+    if (_newOwner !== this.world.getServerPlayer()) {
+
+      this.toggleDebugQuest = PlayerControls.connectLocalInput(
+        PlayerInputAction.LeftTertiary,
+        ButtonIcon.Menu,
+        this,
+        { preferredButtonPlacement: ButtonPlacement.Center }
+      );
+
+      this.toggleDebugQuest.registerCallback((action, pressed) => {
+        if (pressed) {
+          this.onQuestTogglePressed();
+        }
+      });
+    }
+  }
 
   initializeUI() {
     const frameNode = this.props.frameTexture
@@ -31,7 +54,7 @@ class PlayerQuestHUD extends UIComponent {
       })
       : undefined;
 
-    return UINode.if(this.isVisibleBinding, View({
+    return UINode.if(this.finalVisibilityBinding, View({
       style: RootStyle,
       children: [
         frameNode,
@@ -69,16 +92,41 @@ class PlayerQuestHUD extends UIComponent {
       (data: { player: Player, visible: boolean }) => {
         const localPlayer = this.world.getLocalPlayer();
         if (localPlayer && this.entity.owner.get() === localPlayer) {
-          this.isVisibleBinding.set(data.visible);
+          this.questActive = data.visible;
+          // When quest becomes available, default to showing it
+          if (data.visible) {
+            this.userWantsVisible = true;
+          }
+          this.updateFinalVisibility();
         }
        });
+  }
+
+  private onQuestTogglePressed() {
+    // Only allow toggling if quest system says HUD should be available
+    // Only allow toggling if quest system says HUD should be available
+    if (this.questActive) {
+      this.userWantsVisible = !this.userWantsVisible;
+      this.updateFinalVisibility();
+
+      console.log(`[PlayerQuestHUD] User toggled quest HUD: ${this.userWantsVisible}`);
+    } else {
+      console.log(`[PlayerQuestHUD] Cannot toggle - no active quest`);
+    }
+  }
+
+  private updateFinalVisibility() {
+    const finalVisible = this.questActive && this.userWantsVisible;
+    this.finalVisibilityBinding.set(finalVisible);
   }
 
   private updateUIBindings(title: string, objective: string, visible: boolean): void {
     this.titleTextBinding.set(title);
     this.objectiveTextBinding.set(objective);
-    this.isVisibleBinding.set(visible);
+    this.questActive = visible;
 
+    // When quest visibility changes, update final visibility
+    this.updateFinalVisibility();
   }
 }
 UIComponent.register(PlayerQuestHUD);
