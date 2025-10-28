@@ -1,6 +1,7 @@
 import { DialogContainer } from 'Dialog_UI';
 import * as hz from 'horizon/core';
 import { TUTORIAL_QUEST_STAGES, TUTORIAL_QUEST_KEY } from 'TutorialQuestDAO';
+export { getTreeForStage, traverseByKeyFor };
 
 // For conversations that can loop back on themselves, terminate after this many steps
 const MAX_TREE_LENGTH = 16;
@@ -8,7 +9,7 @@ const MAX_TREE_LENGTH = 16;
 // Local dialogue data (no editor props required)
 // Each node has a response and up to 3 options (index-based navigation)
 type LocalOption = { text: string; next?: string | null; close?: boolean };
-type LocalNode = { id: string; response: string; options: LocalOption[], startQuestOnEnter?: string, questId?: string };
+type LocalNode = { id: string; response: string; options: LocalOption[], startQuestOnEnter?: string, questId?: string, audio?: string };
 
 
 
@@ -16,38 +17,43 @@ type LocalNode = { id: string; response: string; options: LocalOption[], startQu
 const DIALOG_INTRO: Record<string, LocalNode> = {
   root: {
     id: 'root',
-    response: "Welcome! You're lucky you were brought ashore, the storm was rough. I can help you off here, interested?",
+    response: "Hey there—you're safe now. That storm was a nasty one. I can get you settled if you're up for lending a hand?",
+    audio: 'introRoot',
     options: [
-      { text: 'Thanks! Yes', next: 'interested' },
+      { text: 'Sure, happy to help', next: 'interested' },
       { text: 'Where am I?', next: 'where' },
     ],
   },
   where: {
     id: 'where',
-    response: 'This is Whispering Isle, we need help from people to help us.',
+    response: 'This is Whispering Isle. Quiet on good days, trouble on the rest. Extra hands make a big difference.',
+    audio: 'introWhere',
     options: [
-      { text: 'I will help!', next: 'interested' },
-      { text: 'Not for me', close: true },
+      { text: 'Alright—I’ll help!', next: 'interested' },
+      { text: 'Not for me, sorry', close: true },
     ],
   },
   interested: {
     id: 'interested',
-    response: "Great! We need some resources gathered, if you help me, I can get you off the island:",
+    response: "Nothing scary: grab a storage bag, then gather a few coconuts. Easy work, good warm-up after a storm.",
+    audio: 'introInterested',
     options: [
-      { text: 'Okay!', next: 'continued' },
+      { text: 'Alright—I’ll help!', next: 'continued' },
       { text: 'Not ready yet', next: 'notReady' },
     ],
   },
   notReady: {
     id: 'notReady',
-    response: "Oh, when you're ready speak to me",
+    response: "No rush. Take a breath, look around, then come talk to me when you’re ready.",
+    audio: 'introNotReady',
     options: [
       { text: 'OK', close: true },
     ],
   },
   continued: {
     id: 'continued',
-    response: 'Great! First, grab that storage bag over there - you\'ll need it to carry supplies.',
+    response: 'First, pick up that woven bag. Then collect 5 coconuts from the beach. Come back to me after.',
+    audio: 'introContinued',
     options: [{ text: 'OK', close: true }],
     startQuestOnEnter: TUTORIAL_QUEST_KEY
   },

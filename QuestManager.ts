@@ -3,7 +3,6 @@ import { EventsService, ISubmitQuestCollectProgress, QuestPayload } from 'consta
 import { PlayerStateService } from 'PlayerStateService';
 import { TUTORIAL_QUEST_KEY, QuestStatus, QuestMessageDisplay, QuestStageConfig } from 'TutorialQuestDAO';
 
-
 class QuestManager extends hz.Component<typeof QuestManager> {
   static propsDefinition = {
     questHud: { type: hz.PropTypes.Entity },
@@ -283,7 +282,10 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       if (entityId) {
         console.log(`[QuestManager] Sending destroy request for entityId=${entityId}`);
         this.playCollectionSoundForPlayer(player, entityId);
-        this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+        if (matchingObjectiveDef.objectiveId !== "collect_storage_bag") {
+          this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+        }
+
       }
 
 

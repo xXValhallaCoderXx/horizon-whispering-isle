@@ -1,6 +1,6 @@
 
 import { DialogContainer } from 'Dialog_UI';
-import { DialogScript } from 'DialogScript';
+import { DialogScript, getTreeForStage, traverseByKeyFor } from 'DialogScript';
 import { EventsService } from 'constants';
 import * as hz from 'horizon/core';
 import { AudioGizmo, AudibilityMode, } from 'horizon/core';
@@ -22,10 +22,12 @@ export class NPC extends hz.Component<typeof NPC> {
     questAcceptedSound: { type: hz.PropTypes.Entity },
     npcManager: { type: hz.PropTypes.Entity, default: undefined },
     questManager: { type: hz.PropTypes.Entity },
+    audioIntroRoot: { type: hz.PropTypes.Entity },
+    audioIntroWhere: { type: hz.PropTypes.Entity },
   };
 
   private scriptData?: DialogScript;
-
+  private currentAudio?: AudioGizmo;
   start() {
     this.scriptData = this.props.dialogScript?.getComponents<DialogScript>()[0]
     this.connectCodeBlockEvent(this.props.proximityTrigger!, hz.CodeBlockEvents.OnPlayerEnterTrigger, (player: hz.Player) => this.onPlayerEnterTrigger(player))
@@ -69,6 +71,24 @@ export class NPC extends hz.Component<typeof NPC> {
 
     console.log(`[NPC] Dialog for ${player.name.get()} at stage ${stage}:`, dialog ? 'Found' : 'Null (dialog closed)');
 
+    if (dialog && this.scriptData) {
+      // Get the current node to find its ID
+      const tree = getTreeForStage(stage);
+      console.log("SPEECH TREE- 1 : ", tree)
+      console.error(`SPEECH - 1 KEY ${key}:`);
+      console.log("SPEECH STAGE - : ", stage)
+      const { node } = traverseByKeyFor(tree, key);
+      console.log(`SPEECH - 2 Current dialog node:`, node);
+
+      // this.playDialogueAudio(this.props.audioIntroRoot, player);
+      if (node) {
+        const audioEntity = this.getAudioEntityForNode(stage, node.id);
+        this.playDialogueAudio(audioEntity, player);
+      }
+    }
+
+
+
     // 4. If dialog is null, it means the player closed the dialog tree
     //    Handle quest actions based on current stage
     if (!dialog) {
@@ -85,6 +105,46 @@ export class NPC extends hz.Component<typeof NPC> {
       try { (mgr as any).setDialogOpen(player, !!dialog); } catch { /* ignore */ }
     }
     this.sendNetworkBroadcastEvent(DialogEvents.sendDialogScript, { container: dialog }, [player]);
+  }
+
+  private getAudioEntityForNode(stage: TUTORIAL_QUEST_STAGES, nodeId: string): hz.Entity | undefined {
+    // Map stage + nodeId to audio entity
+    if (stage === TUTORIAL_QUEST_STAGES.STAGE_NOT_STARTED) {
+      switch (nodeId) {
+        case 'root': return this.props.audioIntroRoot;
+        case 'where': return this.props.audioIntroWhere;
+        // case 'interested': return this.props.audioIntroInterested;
+        // case 'notReady': return this.props.audioIntroNotReady;
+        // case 'continued': return this.props.audioIntroContinued;
+      }
+    }
+    return undefined
+  }
+
+  private playDialogueAudio(audioEntity: hz.Entity | undefined, player: hz.Player) {
+    if (!audioEntity) return;
+
+    // Stop any currently playing audio
+    if (this.currentAudio) {
+      try {
+        this.currentAudio.stop();
+      } catch (e) {
+        console.warn(`[NPC] Failed to stop previous audio:`, e);
+      }
+    }
+
+    const soundGizmo = audioEntity.as(AudioGizmo);
+    if (soundGizmo) {
+      const options = {
+        fade: 0,
+        players: [player],
+        audibilityMode: AudibilityMode.AudibleTo,
+      };
+      soundGizmo.play(options);
+
+      // Track this audio so we can stop it next time
+      this.currentAudio = soundGizmo;
+    }
   }
 
   /**

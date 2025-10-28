@@ -54,7 +54,10 @@ class CollectibleStorage extends hz.Component<typeof CollectibleStorage> {
     // Attach to player torso (holster)
     const attachable = this.entity.as(hz.AttachableEntity);
     if (attachable) {
-      try { attachable.attachToPlayer(player, hz.AttachablePlayerAnchor.Torso); } catch { }
+      try {
+        attachable.attachToPlayer(player, hz.AttachablePlayerAnchor.Torso);
+        player.clearAvatarGripPoseOverride();
+      } catch { }
     } else {
       console.warn('[CollectibleStorage] Entity is not attachable');
     }
