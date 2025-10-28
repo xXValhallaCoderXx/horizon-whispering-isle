@@ -1,3 +1,4 @@
+import { ITEM_TYPES } from "constants";
 import * as hz from "horizon/core";
 
 
@@ -116,9 +117,9 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     objectives: [
       {
         objectiveId: 'collect_coconuts',
-        itemType: 'coconut',
-        targetCount: 2,
-        description: 'Collect 2 coconuts'
+        itemType: ITEM_TYPES.COCONUT,
+        targetCount: 1,
+        description: 'Collect 1 coconut'
       }
     ]
   },
@@ -148,9 +149,9 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     objectives: [
       {
         objectiveId: 'hunt_chicken',
-        itemType: 'chicken_meat',
-        targetCount: 3,
-        description: 'Hunt 3 chicken for meat'
+        itemType: ITEM_TYPES.CHICKEN_MEAT,
+        targetCount: 1,
+        description: 'Hunt chickens for meat'
       }
     ]
   },
@@ -178,9 +179,9 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
     objectives: [
       {
         objectiveId: 'gather_wood',
-        itemType: 'wood',
-        targetCount: 10,
-        description: 'Gather 10 wood from trees'
+        itemType: ITEM_TYPES.RAW_WOOD_LOG,
+        targetCount: 1,
+        description: 'Gather 1 wood from trees'
       }
     ]
   },

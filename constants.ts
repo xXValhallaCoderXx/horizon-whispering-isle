@@ -1,4 +1,5 @@
 import { BaseWeapon } from 'BaseWeapon';
+
 import { Entity, Player, Vec3, LocalEvent, NetworkEvent, Asset } from 'horizon/core';
 
 
@@ -15,6 +16,12 @@ export class EventsService {
     static readonly CameraEvents = {
         PanToEntity: new LocalEvent<IPanToEntityPayload>('player.pan_to_entity'),
     }
+    static readonly HarvestEvents = {
+        TreeHit: new NetworkEvent<ITreeHitPayload>('harvest.tree_hit'),
+        TreeDepleted: new NetworkEvent<ITreeDepletedPayload>('harvest.tree_depleted'),
+        SpawnLog: new NetworkEvent<ISpawnLogPayload>('harvest.spawn_log'), // NEW
+    };
+
 
     static readonly QuestEvents = {
         QuestStarted: new LocalEvent<IQuestStarted>(), // Listen for when a new quest is started (Tutorial quest)
@@ -67,7 +74,18 @@ export class EventsService {
 
 
 
+export type ITreeHitPayload = {
+    player: Player;
+    treeEntity: Entity;
+    hitPosition: Vec3;
+    healthRemaining: number;
+}
 
+export type ITreeDepletedPayload = {
+    player: Player;
+    treeEntity: Entity;
+    position: Vec3;
+}
 
 
 
@@ -125,6 +143,8 @@ export type IAttackSwingPayload = {
     damage: number;
     reach?: number;        // meters
     durationMs?: number;   // swing active window
+    toolType?: string;     // "axe", "sword", "pickaxe"
+    isHarvestTool?: boolean; // true for axes
 }
 export type INPCDeath = {
     targetNpcId: string;
@@ -137,7 +157,7 @@ export type INPCDeath = {
 
 export type CheckQuestSubmissionPayload = {
     player: Player;
-    itemType: string;      // 'coconut', 'wood', etc.
+    itemType: ITEM_TYPES;     
     amount: number;
 };
 
@@ -200,58 +220,11 @@ export interface SpawnableItemConfig {
     rareSpawnRate?: number;      // 0..1 chance for rare variant
 }
 
-export const SPAWNABLE_ITEMS: { [key: string]: SpawnableItemConfig } = {
-    coconut: {
-        itemId: 'coconut',       // Will add this to ITEMS
-        label: 'Coconut',
-        spawnRate: 3000,
-        spawnChance: 0.7,
-        maxActive: 5,
-        rareSpawnRate: 0.1
-    },
-    wood: {
-        itemId: 'wood',
-        label: 'Wood',
-        spawnRate: 5000,
-        spawnChance: 0.6,
-        maxActive: 8,
-        rareSpawnRate: 0.05
-    },
-    stone: {
-        itemId: 'stone',
-        label: 'Stone',
-        spawnRate: 4000,
-        spawnChance: 0.65,
-        maxActive: 6,
-        rareSpawnRate: 0.08
-    }
+
+export type ISpawnLogPayload = {
+    position: Vec3;
+    itemId: string;
 };
-
-
-// export const ITEMS = {
-//     coconut: {
-//         type: 'collectible',
-//         label: 'Coconut',
-//         description: "A tasty tropical fruit.",
-//         spawnRate: 3000, // in milliseconds
-//         rareSpawnRate: 0.1,
-//         maxActive: 5,
-//         maxActiveRares: 1,
-//         spawnChance: 0.7,
-//     },
-//     ['enemy-chicken']: {
-//         type: 'enemy-chicken',
-//         label: 'Chicken',
-//         description: "A feathery foe.",
-//         spawnRate: 3000, // in milliseconds
-//         rareSpawnRate: 0.1,
-//         maxActive: 5,
-//         maxActiveRares: 1,
-//         spawnChance: 0.7,
-//     }
-// }
-
-
 
 export interface ItemConfig {
     id: string;
@@ -266,8 +239,29 @@ export enum ITEM_TYPES {
     COIN = 'coin',
     FEATHER = 'feather',
     GEM_SMALL = 'gem_small',
-    CHICKEN_MEAT = 'chicken_meat'
+    CHICKEN_MEAT = 'chicken_meat',
+    RAW_WOOD_LOG = 'raw_wood_log',
+    COCONUT = 'coconut',
 }
+
+export const SPAWNABLE_ITEMS: { [key: string]: SpawnableItemConfig } = {
+    [ITEM_TYPES.COCONUT]: {
+        itemId: ITEM_TYPES.COCONUT,
+        label: 'Coconut',
+        spawnRate: 3000,
+        spawnChance: 0.7,
+        maxActive: 5,
+        rareSpawnRate: 0.1
+    },
+    [ITEM_TYPES.RAW_WOOD_LOG]: {
+        itemId: ITEM_TYPES.RAW_WOOD_LOG,
+        label: 'Wood',
+        spawnRate: 5000,
+        spawnChance: 0.6,
+        maxActive: 8,
+        rareSpawnRate: 0.05
+    },
+};
 
 export const ITEMS: { [key: string]: ItemConfig } = {
     coin: {
@@ -297,6 +291,13 @@ export const ITEMS: { [key: string]: ItemConfig } = {
         type: 'material',
         value: 10,
         description: 'A piece of raw chicken meat'
+    },
+    raw_wood_log: {
+        id: ITEM_TYPES.RAW_WOOD_LOG,
+        label: 'Raw Wood Log',
+        type: 'material',
+        value: 10,
+        description: 'A log of raw wood'
     }
 };
 
@@ -329,15 +330,15 @@ export const MONSTERS: { [key: string]: MonsterConfigData } = {
         spawnChance: 0.8,
         maxActive: 5,
         rareChance: 0.1,
-        commonStats: { health: 100, scale: Vec3.one },
-        rareStats: { health: 500, scale: new Vec3(1.5, 1.5, 1.5) },
+        commonStats: { health: 25, scale: Vec3.one },
+        rareStats: { health: 50, scale: new Vec3(1.5, 1.5, 1.5) },
         lootTable: {
             dropMode: 'multiple',  // Roll each item independently
             entries: [
-                { itemId: ITEM_TYPES.FEATHER, dropChance: 0.4, minQuantity: 1, maxQuantity: 2 },
-                { itemId: ITEM_TYPES.CHICKEN_MEAT, dropChance: 0.3, minQuantity: 1, maxQuantity: 1 },
-                { itemId: ITEM_TYPES.COIN, dropChance: 0.1, minQuantity: 1, maxQuantity: 1 },
-                { itemId: ITEM_TYPES.GEM_SMALL, dropChance: 0.05, minQuantity: 1, maxQuantity: 1 }
+                // { itemId: ITEM_TYPES.FEATHER, dropChance: 0.4, minQuantity: 1, maxQuantity: 2 },
+                { itemId: ITEM_TYPES.CHICKEN_MEAT, dropChance: 0.6, minQuantity: 1, maxQuantity: 1 },
+                // { itemId: ITEM_TYPES.COIN, dropChance: 0.1, minQuantity: 1, maxQuantity: 1 },
+                // { itemId: ITEM_TYPES.GEM_SMALL, dropChance: 0.05, minQuantity: 1, maxQuantity: 1 }
             ],
             guaranteedDrops: [],      // None for now
             scatterRadius: 1.5,
@@ -347,4 +348,45 @@ export const MONSTERS: { [key: string]: MonsterConfigData } = {
         }
     },
 
+};
+
+
+export enum TREES {
+    OAK = 'oak',
+    PINE = 'pine',
+}
+
+
+export interface HarvestableTreeConfig {
+    treeType: TREES;
+    toolType: string; // e.g., "axe", "hatchet"
+    maxHealth: number;
+    dropChance: number; // 0.0 to 1.0
+    minDrops: number;
+    maxDrops: number;
+    regenTimeMs: number; // Time before tree can be harvested again
+    logItemId: string; // References ITEMS
+}
+
+export const TREE_TYPES: { [key: string]: HarvestableTreeConfig } = {
+    [TREES.OAK]: {
+        treeType: TREES.OAK,
+        toolType: 'axe',
+        maxHealth: 5, // 5 hits to chop down
+        dropChance: 0.8, // 80% chance to drop logs
+        minDrops: 1,
+        maxDrops: 3,
+        regenTimeMs: 30000, // 30 seconds to respawn
+        logItemId: ITEM_TYPES.RAW_WOOD_LOG
+    },
+    [TREES.PINE]: {
+        treeType: TREES.PINE,
+        toolType: 'axe',
+        maxHealth: 3, // Easier tree
+        dropChance: 0.6,
+        minDrops: 1,
+        maxDrops: 2,
+        regenTimeMs: 20000,
+        logItemId: ITEM_TYPES.RAW_WOOD_LOG
+    }
 };

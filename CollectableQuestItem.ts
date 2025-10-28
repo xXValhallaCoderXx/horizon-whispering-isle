@@ -1,9 +1,9 @@
 import * as hz from "horizon/core";
-import { EventsService } from "constants";
+import { EventsService, ITEM_TYPES } from "constants";
 
 class CollectableQuestItem extends hz.Component<typeof CollectableQuestItem> {
   static propsDefinition = {
-    itemId: { type: hz.PropTypes.String, default: 'coconut' },
+    itemId: { type: hz.PropTypes.String, default: ITEM_TYPES.COCONUT },
   };
 
   currentPlayer: hz.Player | null = null;

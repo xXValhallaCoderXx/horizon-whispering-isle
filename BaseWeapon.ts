@@ -21,6 +21,8 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     damage: { type: PropTypes.Number, default: 25 },
     reach: { type: PropTypes.Number, default: 2.0 },
     weight: { type: PropTypes.Number, default: 5 },
+    toolType: { type: PropTypes.String, default: "" }, // "axe", "sword", "pickaxe"
+    isHarvestTool: { type: PropTypes.Boolean, default: false }, // true for axes
   };
   private owner: Player | null = null;
 
@@ -104,6 +106,8 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
       damage: this.props.damage, // Was 25
       reach: this.props.reach, // Was 2.0
       durationMs: 250, // Was 250
+      toolType: this.props.toolType,        // NEW
+      isHarvestTool: this.props.isHarvestTool, // NEW
     });
   }
 

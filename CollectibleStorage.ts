@@ -1,5 +1,5 @@
 import * as hz from "horizon/core";
-import { EventsService } from "constants";
+import { EventsService, ITEM_TYPES } from "constants";
 
 class CollectibleStorage extends hz.Component<typeof CollectibleStorage> {
   static propsDefinition = {
@@ -82,7 +82,7 @@ class CollectibleStorage extends hz.Component<typeof CollectibleStorage> {
   private handleQuestCollection(entity: hz.Entity) {
     if (this.owner) {
       // Submit using new quest collection flow handled by QuestManager
-      const itemId = 'coconut'; // Default item type supported by this storage
+      const itemId = ITEM_TYPES.COCONUT; // Default item type supported by this storage
       const rawId: any = (entity as any)?.id;
       const entityId = typeof rawId === 'bigint' ? rawId.toString() : String(rawId);
       console.log(
