@@ -2,16 +2,14 @@ import * as hz from 'horizon/core';
 import { EventsService, ISubmitQuestCollectProgress, QuestPayload } from 'constants';
 import { PlayerStateService } from 'PlayerStateService';
 import { TUTORIAL_QUEST_KEY, QuestStatus, QuestMessageDisplay, QuestStageConfig } from 'TutorialQuestDAO';
+import { SoundFxBank } from 'SoundFxBank';
+import { VisualFxBank } from 'VisualFxBank';
 
 class QuestManager extends hz.Component<typeof QuestManager> {
   static propsDefinition = {
     questHud: { type: hz.PropTypes.Entity },
     // Asset to spawn for the player's storage bag
     storageBagAsset: { type: hz.PropTypes.Asset },
-    // Optional: an AudioGizmo entity to play when a quest item is collected
-    collectSound: { type: hz.PropTypes.Entity },
-    // Optional: a ParticleGizmo entity to play when a quest item is collected
-    collectVfx: { type: hz.PropTypes.Entity },
     storageBagSpawnPoint: { type: hz.PropTypes.Entity },
     starterAxeAsset: { type: hz.PropTypes.Asset },
     starterAxeSpawnPoint: { type: hz.PropTypes.Entity },
@@ -481,41 +479,34 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
   private playCollectionSoundForPlayer(player: hz.Player, entityId?: string) {
     try {
-      const soundEntity = this.props.collectSound as hz.Entity | undefined;
-      const audio = soundEntity?.as(hz.AudioGizmo);
-      if (!audio) return;
+      SoundFxBank.instance.playSoundForPlayer("quest_item_collect", player);
 
-      const options: hz.AudioOptions = {
-        fade: 0,
-        players: [player],
-        audibilityMode: hz.AudibilityMode.AudibleTo,
-      };
-      audio.play(options);
     } catch { }
   }
 
   private playCollectionVfxForPlayer(player: hz.Player, entityId?: string) {
     try {
-      const vfxEntity = this.props.collectVfx as hz.Entity | undefined;
-      const particle = vfxEntity?.as(hz.ParticleGizmo);
-      if (!particle) return;
+      VisualFxBank.instance.playVFXForPlayer("sparkle_star", player);
+      // const vfxEntity = this.props.collectVfx as hz.Entity | undefined;
+      // const particle = vfxEntity?.as(hz.ParticleGizmo);
+      // if (!particle) return;
 
-      // Position the particle where the item was collected, if available
-      if (entityId) {
-        try {
-          const idBig = BigInt(entityId);
-          const e = new hz.Entity(idBig);
-          const pos = e.position.get();
-          try { vfxEntity!.position.set(pos); } catch {}
-        } catch {}
-      }
+      // // Position the particle where the item was collected, if available
+      // if (entityId) {
+      //   try {
+      //     const idBig = BigInt(entityId);
+      //     const e = new hz.Entity(idBig);
+      //     const pos = e.position.get();
+      //     try { vfxEntity!.position.set(pos); } catch {}
+      //   } catch {}
+      // }
 
-      const options: hz.ParticleFXPlayOptions = {
-        fromStart: true,
-        oneShot: true,
-        players: [player],
-      };
-      particle.play(options);
+      // const options: hz.ParticleFXPlayOptions = {
+      //   fromStart: true,
+      //   oneShot: true,
+      //   players: [player],
+      // };
+      // particle.play(options);
     } catch {}
   }
 

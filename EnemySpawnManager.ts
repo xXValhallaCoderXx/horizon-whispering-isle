@@ -1,7 +1,7 @@
 import * as hz from 'horizon/core';
 import { MonsterConfigData, MONSTERS, EventsService } from 'constants';
-
-
+import { VisualFxBank } from 'VisualFxBank';
+import { SoundFxBank } from 'SoundFxBank';
 // Internal wrapper class (same pattern as your ItemSpawnController)
 class MonsterSpawnController {
   controller: hz.SpawnController;
@@ -126,7 +126,7 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
     // Listen for damage requests (e.g., from player weapons)
     this.connectNetworkBroadcastEvent(
       EventsService.CombatEvents.MonsterTookDamage,
-      (data: { monsterId: string; damage: number; attackerId?: string }) => this.onDamageRequest(data)
+      (data) => this.onDamageRequest(data)
     );
 
 
@@ -225,7 +225,10 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
 
   // ---- Combat Handlers (Server-Side) ----
 
-  private onDamageRequest(data: { monsterId: string; damage: number; attackerId?: string }) {
+  private onDamageRequest(data: { monsterId: string; damage: number; attackerId?: string, player: hz.Player }) {
+
+    SoundFxBank.instance.playSoundAt("quest_item_collect", data.player.position.get(), 1.5);
+    VisualFxBank.instance.playVFXAt("smoke_destroy_small", data.player.position.get(), 1.5);
 
     const key = this.toIdKey(data.monsterId);
 

@@ -1,5 +1,7 @@
 import * as hz from 'horizon/core';
 import { HarvestableTreeConfig, TREE_TYPES, EventsService, ITEM_TYPES, ITEMS } from 'constants';
+import { SoundFxBank } from 'SoundFxBank';
+import { VisualFxBank } from 'VisualFxBank';
 
 // Internal wrapper class to track spawned tree state
 class TreeSpawnController {
@@ -230,6 +232,9 @@ class TreeSpawnManager extends hz.Component<typeof TreeSpawnManager> {
 
     // Update server-side health
     controller.currentHealth = data.healthRemaining;
+
+    SoundFxBank.instance.playSoundAt("wood_hit_success", data.hitPosition);
+    VisualFxBank.instance.playVFXAt("smoke_destroy_small", data.hitPosition);
 
     console.log(`[TreeSpawnManager] Tree hit! Health: ${controller.currentHealth}/${controller.maxHealth}`);
   }

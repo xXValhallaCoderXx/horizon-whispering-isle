@@ -24,6 +24,9 @@ export class NPC extends hz.Component<typeof NPC> {
     questManager: { type: hz.PropTypes.Entity },
     audioIntroRoot: { type: hz.PropTypes.Entity },
     audioIntroWhere: { type: hz.PropTypes.Entity },
+    audioIntroNotReady: { type: hz.PropTypes.Entity },
+    audioIntroInterested: { type: hz.PropTypes.Entity },
+    audioIntroContinued: { type: hz.PropTypes.Entity },
   };
 
   private scriptData?: DialogScript;
@@ -113,9 +116,9 @@ export class NPC extends hz.Component<typeof NPC> {
       switch (nodeId) {
         case 'root': return this.props.audioIntroRoot;
         case 'where': return this.props.audioIntroWhere;
-        // case 'interested': return this.props.audioIntroInterested;
-        // case 'notReady': return this.props.audioIntroNotReady;
-        // case 'continued': return this.props.audioIntroContinued;
+        case 'interested': return this.props.audioIntroInterested;
+        case 'notReady': return this.props.audioIntroNotReady;
+        case 'continued': return this.props.audioIntroContinued;
       }
     }
     return undefined

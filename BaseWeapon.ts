@@ -15,6 +15,7 @@ import {
 } from "horizon/core";
 import { EventsService } from "constants";
 import { StartAttackingPlayer, StopAttackingPlayer } from "EnemyNPC";
+import { VisualFxBank } from "VisualFxBank";
 export const DamageEvent = new LocalEvent<{ amount: number }>();
 
 
@@ -29,6 +30,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     hitRingEffect: { type: PropTypes.Entity },
     hitResourceDullEffect: { type: PropTypes.Entity },
     hitResourceOreSuccessEffect: { type: PropTypes.Entity },
+    hitResourceWoodSuccessEffect: { type: PropTypes.Entity },
     baseCooldownMs: { type: PropTypes.Number, default: 500 }, // Base cooldown in milliseconds
     weightMultiplier: { type: PropTypes.Number, default: 50 },
     hitCooldownMs: { type: PropTypes.Number, default: 100 }, // Minimum time between hits
@@ -39,6 +41,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
   private hitRingVfx?: ParticleGizmo | null = null;
   private hitResourceDullSfx?: AudioGizmo | null = null;
   private hitResourceOreSuccessSfx?: AudioGizmo | null = null;
+  private hitResourceWoodSuccessSfx?: AudioGizmo | null = null;
   private lastSwingTime: number = 0; // Track when the last swing occurred
   private isSwinging: boolean = false; // Track if currently swinging
 
@@ -52,6 +55,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     this.hitSparkVfx = this.props.hitSparkEffect?.as(ParticleGizmo);
     this.hitResourceDullSfx = this.props.hitResourceDullEffect?.as(AudioGizmo);
     this.hitResourceOreSuccessSfx = this.props.hitResourceOreSuccessEffect?.as(AudioGizmo);
+    this.hitResourceWoodSuccessSfx = this.props.hitResourceWoodSuccessEffect?.as(AudioGizmo);
 
     this.connectCodeBlockEvent(
       this.entity,
@@ -146,7 +150,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     const toolType = this.props.type.toLowerCase();
 
     console.log(`[BaseWeapon] Hit ${entityName} (base: ${baseName}) with ${toolType}`);
-
+    // TODO - Hacky as shit but no time
     if (baseName === "ore" && toolType !== "pickaxe") {
       this.hitResourceDullSfx?.play();
       this.hitRingVfx?.play();
@@ -154,7 +158,11 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
       this.hitResourceDullSfx?.play();
       this.hitRingVfx?.play();
     } else {
-      this.hitResourceOreSuccessSfx?.play();
+      if (baseName === "ore") {
+        this.hitResourceOreSuccessSfx?.play(); 
+      } else if (baseName === "tree") {
+        this.hitResourceWoodSuccessSfx?.play();
+      }
       this.hitSparkVfx?.play();
     }
   }
@@ -204,6 +212,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
 
   // ** ADD THIS: Pass input to components **
   private onFireReleased(player: Player) {
+
     if (!this.isHeld()) return;
   }
 

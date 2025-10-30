@@ -118,8 +118,8 @@ export const TUTORIAL_QUEST_STAGE_CONFIG: Record<TUTORIAL_QUEST_STAGES, QuestSta
       {
         objectiveId: 'collect_coconuts',
         itemType: ITEM_TYPES.COCONUT,
-        targetCount: 1,
-        description: 'Collect 1 coconut'
+        targetCount: 3,
+        description: 'Collect 3 coconuts'
       }
     ]
   },

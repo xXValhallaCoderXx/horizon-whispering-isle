@@ -491,7 +491,8 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     this.sendNetworkBroadcastEvent(EventsService.CombatEvents.MonsterTookDamage, {
       monsterId: this.entity.id.toString(),
       damage: amount,
-      attackerId: attacker.id.toString()
+      attackerId: attacker.id.toString(),
+      player: attacker
     });
 
     this.lastHitTime = now;

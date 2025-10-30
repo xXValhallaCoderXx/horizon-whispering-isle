@@ -126,7 +126,7 @@ class EnemyNPCSpawnManager extends hz.Component<typeof EnemyNPCSpawnManager> {
     // Listen for damage requests (e.g., from player weapons)
     this.connectNetworkBroadcastEvent(
       EventsService.CombatEvents.MonsterTookDamage,
-      (data: { monsterId: string; damage: number; attackerId?: string }) => this.onDamageRequest(data)
+      (data) => this.onDamageRequest(data)
     );
 
 

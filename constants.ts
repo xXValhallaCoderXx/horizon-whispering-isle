@@ -24,6 +24,7 @@ export class EventsService {
         OreHit: new NetworkEvent<IOreHitPayload>('harvest.ore_hit'),
         OreDepleted: new NetworkEvent<IOreDepletedPayload>('harvest.ore_depleted'),
         RequestOreHit: new NetworkEvent<IRequestOreHitPayload>('harvest.request_ore_hit'),
+        RequestTreeHit: new NetworkEvent<{ player: Player; treeEntity: Entity; toolType: string; hitPosition: Vec3 }>('harvest.request_tree_hit'),
 
 
 
@@ -63,7 +64,7 @@ export class EventsService {
 
     static readonly CombatEvents = {
         PlayerTookDamage: new NetworkEvent<{ player: Player; damage: number; monsterId?: string }>('combat.player_took_damage'), // Server -> Player
-        MonsterTookDamage: new NetworkEvent<{ monsterId: string; damage: number; attackerId?: string }>('combat.monster_took_damage'), // Player -> Server
+        MonsterTookDamage: new NetworkEvent<{ monsterId: string; damage: number; attackerId?: string, player: Player }>('combat.monster_took_damage'), // Player -> Server
         MonsterDied: new NetworkEvent<{ monsterId: string; killerId?: string, monsterType: string }>('combat.monster_died'), // Server -> All (if needed for quests)
         MonsterHealthUpdate: new NetworkEvent<{ monsterId: string; currentHealth: number; maxHealth: number, visible: boolean }>('combat.monster_health_update'), // Server -> All
 
@@ -301,7 +302,7 @@ export const SPAWNABLE_ITEMS: { [key: string]: SpawnableItemConfig } = {
         label: 'Coconut',
         spawnRate: 3000,
         spawnChance: 0.7,
-        maxActive: 5,
+        maxActive: 3,
         rareSpawnRate: 0.1
     },
     [ITEM_TYPES.RAW_WOOD_LOG]: {
@@ -426,6 +427,12 @@ export const MONSTERS: { [key: string]: MonsterConfigData } = {
 export enum TREES {
     OAK = 'oak',
     PINE = 'pine',
+}
+
+export enum TREE_RARITY {
+    COMMON = 'COMMON',
+    RARE = 'RARE',
+    LEGENDARY = 'LEGENDARY',
 }
 
 

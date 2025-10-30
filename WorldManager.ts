@@ -1,7 +1,7 @@
 import { EventsService } from 'constants';
 import { AudioGizmo, Component, PropTypes, SpawnPointGizmo, Player, CodeBlockEvents, AttachablePlayerAnchor, AttachableEntity, AudioOptions, Entity, AudibilityMode, PlayerVisibilityMode, Asset, GrabbableEntity } from 'horizon/core';
 import { PlayerStateService } from 'PlayerStateService';
-
+import { VisualFxBank } from 'VisualFxBank';
 class WorldManager extends Component<typeof WorldManager> {
   static propsDefinition = {
     welcomeSound: { type: PropTypes.Entity },
@@ -39,6 +39,7 @@ class WorldManager extends Component<typeof WorldManager> {
       players: [player],
       audibilityMode: AudibilityMode.AudibleTo,
     };
+    VisualFxBank.instance.playVFXForPlayer("smoke_destroy_small", player);
     welcomeSound && welcomeSound.play(options);
   }
 

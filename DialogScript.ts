@@ -17,7 +17,7 @@ type LocalNode = { id: string; response: string; options: LocalOption[], startQu
 const DIALOG_INTRO: Record<string, LocalNode> = {
   root: {
     id: 'root',
-    response: "Hey there—you're safe now. That storm was a nasty one. I can get you settled if you're up for lending a hand?",
+    response: "Hey there—you're safe now. That storm was a nasty one. I can get you to Whispering Isle, if you're up for lending a hand?",
     audio: 'introRoot',
     options: [
       { text: 'Sure, happy to help', next: 'interested' },
@@ -26,7 +26,7 @@ const DIALOG_INTRO: Record<string, LocalNode> = {
   },
   where: {
     id: 'where',
-    response: 'This is Whispering Isle. Quiet on good days, trouble on the rest. Extra hands make a big difference.',
+    response: "This is Whispering Isle. Quiet on good days, trouble on the rest. The rest, well..you find out when you're there.",
     audio: 'introWhere',
     options: [
       { text: 'Alright—I’ll help!', next: 'interested' },
@@ -35,7 +35,7 @@ const DIALOG_INTRO: Record<string, LocalNode> = {
   },
   interested: {
     id: 'interested',
-    response: "Nothing scary: grab a storage bag, then gather a few coconuts. Easy work, good warm-up after a storm.",
+    response: "Great! Just a few back tasks you know? Collecting coconuts, fighting a chicken or two, Easy work, good warm-up after a storm.",
     audio: 'introInterested',
     options: [
       { text: 'Alright—I’ll help!', next: 'continued' },
@@ -44,7 +44,7 @@ const DIALOG_INTRO: Record<string, LocalNode> = {
   },
   notReady: {
     id: 'notReady',
-    response: "No rush. Take a breath, look around, then come talk to me when you’re ready.",
+    response: "No rush. Take a breath, look around, you will get bored soon, then come talk to me when you’re ready.",
     audio: 'introNotReady',
     options: [
       { text: 'OK', close: true },
@@ -52,7 +52,7 @@ const DIALOG_INTRO: Record<string, LocalNode> = {
   },
   continued: {
     id: 'continued',
-    response: 'First, pick up that woven bag. Then collect 5 coconuts from the beach. Come back to me after.',
+    response: 'Pick up that woven bag over there. Then collect, 3 coconuts from around the island. Come back to me after. Oh yeah! Take care of those chickens!',
     audio: 'introContinued',
     options: [{ text: 'OK', close: true }],
     startQuestOnEnter: TUTORIAL_QUEST_KEY
