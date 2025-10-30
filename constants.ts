@@ -1,6 +1,6 @@
 import { BaseWeapon } from 'BaseWeapon';
 
-import { Entity, Player, Vec3, LocalEvent, NetworkEvent, Asset } from 'horizon/core';
+import { Entity, Player, Vec3, LocalEvent, NetworkEvent, Asset, InfoSlide } from 'horizon/core';
 
 
 export const INVENTORY_STATE_KEY = `player:inventory_state`;

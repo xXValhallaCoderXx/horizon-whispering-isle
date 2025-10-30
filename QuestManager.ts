@@ -278,6 +278,26 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       if (wasCompleted) {
         objectiveProgress.isCompleted = true;
         console.log(`[QuestManager] Objective completed: ${matchingObjectiveDef.objectiveId}`);
+        if (matchingObjectiveDef.objectiveId === "collect_storage_bag") {
+          console.error("SHOW SLIDES");
+          const deviceType = player.deviceType.get()
+          const slides: hz.InfoSlide[] = [
+            {
+              title: `Stroage Bag - ${deviceType}`,
+              message: "You can now store extra resources. Keep harvesting trees and ores—excess items go into your bag.",
+              imageUri: "",
+              style: { attachImageToHeader: false }
+            },
+            {
+              title: `Collecting Items - ${deviceType}`,
+              message: "Collecting items is essential for survival!",
+              imageUri: "",
+              style: { attachImageToHeader: false }
+            }
+          ];
+          player.showInfoSlides(slides);
+
+        }
       }
 
       // Save progress
@@ -315,13 +335,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
         this.playCollectionVfxForPlayer(player, entityId);
 
-        // Show completion popup
-        // this.world.ui.showPopupForPlayer(
-        //   player,
-        //   `✓ ${matchingObjectiveDef.description}`,
-        //   3
-        // );
-        console.error(`[QuestManager] Objective completed popup for ${player.name.get()}: ${matchingObjectiveDef.description}`);
+
 
         // Check if all objectives in current stage are complete
         const allStageObjectivesComplete = stageConfig.objectives.every(
