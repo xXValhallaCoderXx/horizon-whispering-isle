@@ -184,6 +184,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
         if (entityId) {
           const latestInventory = inventoryDAO.getAllItems()
           this.playCollectionSoundForPlayer(player, entityId);
+          this.playCollectionVfxForPlayer(player, entityId);
           this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
           this.sendNetworkEvent(player, EventsService.PlayerEvents.RefreshInventoryHUD, {
             player,
@@ -233,6 +234,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
         if (entityId) {
           const latestInventory = inventoryDAO.getAllItems()
           this.playCollectionSoundForPlayer(player, entityId);
+          this.playCollectionVfxForPlayer(player, entityId);
           this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
           this.sendNetworkEvent(player, EventsService.PlayerEvents.RefreshInventoryHUD, {
             player,
@@ -290,6 +292,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       if (entityId) {
         console.log(`[QuestManager] Sending destroy request for entityId=${entityId}`);
         this.playCollectionSoundForPlayer(player, entityId);
+        this.playCollectionVfxForPlayer(player, entityId);
         if (matchingObjectiveDef.objectiveId !== "collect_storage_bag") {
           this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
         }
@@ -480,33 +483,12 @@ class QuestManager extends hz.Component<typeof QuestManager> {
   private playCollectionSoundForPlayer(player: hz.Player, entityId?: string) {
     try {
       SoundFxBank.instance.playSoundForPlayer("quest_item_collect", player);
-
     } catch { }
   }
 
   private playCollectionVfxForPlayer(player: hz.Player, entityId?: string) {
     try {
       VisualFxBank.instance.playVFXForPlayer("sparkle_star", player);
-      // const vfxEntity = this.props.collectVfx as hz.Entity | undefined;
-      // const particle = vfxEntity?.as(hz.ParticleGizmo);
-      // if (!particle) return;
-
-      // // Position the particle where the item was collected, if available
-      // if (entityId) {
-      //   try {
-      //     const idBig = BigInt(entityId);
-      //     const e = new hz.Entity(idBig);
-      //     const pos = e.position.get();
-      //     try { vfxEntity!.position.set(pos); } catch {}
-      //   } catch {}
-      // }
-
-      // const options: hz.ParticleFXPlayOptions = {
-      //   fromStart: true,
-      //   oneShot: true,
-      //   players: [player],
-      // };
-      // particle.play(options);
     } catch {}
   }
 
