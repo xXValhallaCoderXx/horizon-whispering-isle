@@ -431,20 +431,34 @@ export const MONSTERS: { [key: string]: MonsterConfigData } = {
 
 export interface HarvestableTreeConfig {
     rarity: TREE_RARITY;
-    toolType: string; // e.g., "axe", "hatchet"
+    toolType: string;         // e.g., "axe"
+    // Health range (trees used to be fixed health)
+    minHealth?: number;       // optional for trees; default -> maxHealth
     maxHealth: number;
-    dropChance: number; // 0.0 to 1.0
-    minDrops: number;
-    maxDrops: number;
-    regenTimeMs: number; // Time before tree can be harvested again
-    logItemId: string; // References ITEMS
+
+    // Per-hit drop config (added for trees)
+    dropChancePerStrike?: number; // default -> dropChance
+    minDropsPerStrike?: number;   // default -> minDrops
+    maxDropsPerStrike?: number;   // default -> maxDrops
+
+    // Depletion drop config (added for trees)
+    dropChanceOnDepletion?: number; // default -> dropChance
+    minDropsOnDepletion?: number;   // default -> minDrops
+    maxDropsOnDepletion?: number;   // default -> maxDrops
+
+    // Damage per valid hit (added for trees)
+    minDamagePerHit?: number;     // default -> 1
+    maxDamagePerHit?: number;     // default -> 1
+
+    regenTimeMs: number;
+    logItemId: string;
+
+    // Back-compat (old tree fields). Kept so existing code doesn’t break.
+    dropChance?: number;
+    minDrops?: number;
+    maxDrops?: number;
 }
 
-export enum ORE_RARITY {
-    COMMON = 'common',
-    RARE = 'rare',
-    LEGENDARY = 'legendary',
-}
 
 export interface HarvestableOreConfig {
     rarity: ORE_RARITY;
@@ -473,6 +487,13 @@ export interface HarvestableOreConfig {
     skillRequired?: number; // Placeholder for player skill level
 }
 
+export enum ORE_RARITY {
+    COMMON = 'common',
+    RARE = 'rare',
+    LEGENDARY = 'legendary',
+}
+
+
 export enum TREE_RARITY {
     COMMON = 'COMMON',
     RARE = 'RARE',
@@ -483,35 +504,69 @@ export const TREE_TYPES: { [key: string]: HarvestableTreeConfig } = {
     [TREE_RARITY.COMMON]: {
         rarity: TREE_RARITY.COMMON,
         toolType: 'axe',
+        // Health unified
+        minHealth: 5,
         maxHealth: 5,
-        dropChance: 0.8,
-        minDrops: 1,
-        maxDrops: 3,
+        // Per-hit drops
+        dropChancePerStrike: 0.25,
+        minDropsPerStrike: 1,
+        maxDropsPerStrike: 1,
+        // Depletion guaranteed roll (not guaranteed drop)
+        dropChanceOnDepletion: 0.8,
+        minDropsOnDepletion: 1,
+        maxDropsOnDepletion: 3,
+        // Damage per hit
+        minDamagePerHit: 1,
+        maxDamagePerHit: 2,
         regenTimeMs: 30000,
         logItemId: ITEM_TYPES.RAW_WOOD_LOG,
+
+        // Back-compat mirrors
+        dropChance: 0.8,
+        minDrops: 1,
+        maxDrops: 3
     },
     [TREE_RARITY.RARE]: {
         rarity: TREE_RARITY.RARE,
         toolType: 'axe',
-        maxHealth: 7,
-        dropChance: 0.7,
-        minDrops: 1,
-        maxDrops: 3,
-        regenTimeMs: 45000,
-        logItemId: ITEM_TYPES.RAW_WOOD_LOG,
+      minHealth: 6,
+      maxHealth: 8,
+      dropChancePerStrike: 0.2,
+      minDropsPerStrike: 1,
+      maxDropsPerStrike: 1,
+      dropChanceOnDepletion: 0.7,
+      minDropsOnDepletion: 1,
+      maxDropsOnDepletion: 3,
+      minDamagePerHit: 1,
+      maxDamagePerHit: 2,
+      regenTimeMs: 45000,
+      logItemId: ITEM_TYPES.RAW_WOOD_LOG,
+
+      dropChance: 0.7,
+      minDrops: 1,
+      maxDrops: 3
     },
     [TREE_RARITY.LEGENDARY]: {
         rarity: TREE_RARITY.LEGENDARY,
         toolType: 'axe',
-        maxHealth: 10,
-        dropChance: 0.9,
-        minDrops: 2,
-        maxDrops: 4,
-        regenTimeMs: 60000,
-        logItemId: ITEM_TYPES.RAW_WOOD_LOG,
+      minHealth: 9,
+      maxHealth: 12,
+      dropChancePerStrike: 0.15,
+      minDropsPerStrike: 1,
+      maxDropsPerStrike: 2,
+      dropChanceOnDepletion: 0.9,
+      minDropsOnDepletion: 2,
+      maxDropsOnDepletion: 4,
+      minDamagePerHit: 1,
+      maxDamagePerHit: 2,
+      regenTimeMs: 60000,
+      logItemId: ITEM_TYPES.RAW_WOOD_LOG,
+
+      dropChance: 0.9,
+      minDrops: 2,
+      maxDrops: 4
     },
 };
-
 
 export const ORE_TYPES: { [key: string]: HarvestableOreConfig } = {
     [ORE_RARITY.COMMON]: {
@@ -588,3 +643,93 @@ export const ORE_TYPES: { [key: string]: HarvestableOreConfig } = {
         skillRequired: 10 // Placeholder
     }
 };
+
+
+
+
+export type NormalizedHarvestConfig = {
+    toolType: string;
+    minHealth: number;
+    maxHealth: number;
+    perHitChance: number;
+    perHitMin: number;
+    perHitMax: number;
+    depletionChance: number;
+    depletionMin: number;
+    depletionMax: number;
+    minDamage: number;
+    maxDamage: number;
+    regenTimeMs: number;
+    dropItemId: string; // wood log or ore item id
+};
+
+export function normalizeConfig(cfg: HarvestableTreeConfig | HarvestableOreConfig): NormalizedHarvestConfig {
+    // Trees have optional fields; ores already have full set.
+    const isOre = (cfg as HarvestableOreConfig).oreItemId !== undefined;
+    const perHitChance = (cfg as any).dropChancePerStrike ?? (cfg as any).dropChance ?? 0;
+    const perHitMin = (cfg as any).minDropsPerStrike ?? (cfg as any).minDrops ?? 0;
+    const perHitMax = (cfg as any).maxDropsPerStrike ?? (cfg as any).maxDrops ?? 0;
+
+    const depletionChance = (cfg as any).dropChanceOnDepletion ?? (cfg as any).dropChance ?? 0;
+    const depletionMin = (cfg as any).minDropsOnDepletion ?? (cfg as any).minDrops ?? 0;
+    const depletionMax = (cfg as any).maxDropsOnDepletion ?? (cfg as any).maxDrops ?? 0;
+
+    const minHealth = (cfg as any).minHealth ?? cfg.maxHealth;
+    const minDamage = (cfg as any).minDamagePerHit ?? 1;
+    const maxDamage = (cfg as any).maxDamagePerHit ?? 1;
+
+    const dropItemId = isOre ? (cfg as HarvestableOreConfig).oreItemId : (cfg as HarvestableTreeConfig).logItemId;
+
+    return {
+        toolType: cfg.toolType,
+        minHealth,
+        maxHealth: cfg.maxHealth,
+        perHitChance,
+        perHitMin,
+        perHitMax,
+        depletionChance,
+        depletionMin,
+        depletionMax,
+        minDamage,
+        maxDamage,
+        regenTimeMs: cfg.regenTimeMs,
+        dropItemId
+    };
+}
+
+export function rollInt(min: number, max: number): number {
+    if (max < min) [min, max] = [max, min];
+    if (max <= 0) return 0;
+    return Math.floor(Math.random() * (max - min + 1)) + Math.max(0, min);
+}
+
+export function rollDrops(chance: number, min: number, max: number): number {
+    if (chance <= 0) return 0;
+    if (Math.random() > chance) return 0;
+    return rollInt(min, max);
+}
+
+export type ProcessHitResult = {
+    damage: number;
+    newHealth: number;
+    perHitDrops: number;
+    depleted: boolean;
+    depletionDrops: number; // only >0 when depleted
+};
+
+// Apply one valid strike using the normalized config.
+// Guaranteed roll at depletion = always run a depletion roll if newHealth <= 0.
+export function processHarvestHit(currentHealth: number, cfg: NormalizedHarvestConfig): ProcessHitResult {
+    const damage = rollInt(cfg.minDamage, cfg.maxDamage);
+    let newHealth = Math.max(0, currentHealth - Math.max(1, damage));
+
+    const perHitDrops = rollDrops(cfg.perHitChance, cfg.perHitMin, cfg.perHitMax);
+    let depleted = newHealth <= 0;
+
+    let depletionDrops = 0;
+    if (depleted) {
+        depletionDrops = rollDrops(cfg.depletionChance, cfg.depletionMin, cfg.depletionMax);
+    }
+
+    return { damage, newHealth, perHitDrops, depleted, depletionDrops };
+}

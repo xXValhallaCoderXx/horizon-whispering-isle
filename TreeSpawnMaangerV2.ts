@@ -1,5 +1,5 @@
 import * as hz from 'horizon/core';
-import { EventsService, TREE_TYPES, TREE_RARITY, HarvestableTreeConfig } from 'constants';
+import { EventsService, TREE_TYPES, TREE_RARITY, HarvestableTreeConfig, normalizeConfig, processHarvestHit } from 'constants';
 import { SoundFxBank } from 'SoundFxBank';
 import { VisualFxBank } from 'VisualFxBank';
 
@@ -276,7 +276,7 @@ class TreeSpawnMaangerV2 extends hz.Component<typeof TreeSpawnMaangerV2> {
     const controller = this.entityToController.get(key);
     if (!controller || !controller.isSpawned || !controller.config) return;
 
-    const cfg = controller.config as any;
+    const cfg = normalizeConfig(controller.config);
 
     // Validate tool (optional)
     if (cfg?.toolType && toolType && toolType !== cfg.toolType) {
@@ -286,13 +286,18 @@ class TreeSpawnMaangerV2 extends hz.Component<typeof TreeSpawnMaangerV2> {
       return;
     }
     // Damage roll
-    const minD = Number.isFinite(cfg?.minDamagePerHit) ? Number(cfg.minDamagePerHit) : 1;
-    const maxD = Number.isFinite(cfg?.maxDamagePerHit) ? Number(cfg.maxDamagePerHit) : 3;
-    const damage = Math.floor(Math.random() * (Math.max(maxD - minD, 0) + 1) + minD);
+    // const minD = Number.isFinite(cfg?.minDamagePerHit) ? Number(cfg.minDamagePerHit) : 1;
+    // const maxD = Number.isFinite(cfg?.maxDamagePerHit) ? Number(cfg.maxDamagePerHit) : 3;
+    // const damage = Math.floor(Math.random() * (Math.max(maxD - minD, 0) + 1) + minD);
+    const { damage, newHealth, perHitDrops, depleted, depletionDrops } =
+      processHarvestHit(controller.currentHealth, cfg);
 
+    controller.currentHealth = newHealth;
 
-    controller.currentHealth -= damage;
-    if (controller.currentHealth < 0) controller.currentHealth = 0;
+    // per-hit drops
+    for (let i = 0; i < perHitDrops; i++) {
+      this.spawnWoodLog(this.getScatteredPosition(data.hitPosition, 0.75));
+    }
 
     SoundFxBank.instance.playSoundAt('wood_hit_success', hitPosition, 0);
     VisualFxBank.instance.playVFXAt('sparkle_star', hitPosition, 0);
@@ -304,9 +309,12 @@ class TreeSpawnMaangerV2 extends hz.Component<typeof TreeSpawnMaangerV2> {
       healthRemaining: controller.currentHealth,
     });
 
-    // Depleted?
-    if (controller.currentHealth <= 0) {
-      this.handleTreeDepletion(controller, player, hitPosition);
+    if (depleted) {
+      // guaranteed roll at depletion
+      for (let i = 0; i < depletionDrops; i++) {
+        this.spawnWoodLog(this.getScatteredPosition(data.hitPosition, 0.75));
+      }
+      this.handleTreeDepletion(controller, data.player, data.hitPosition);
     }
   }
 

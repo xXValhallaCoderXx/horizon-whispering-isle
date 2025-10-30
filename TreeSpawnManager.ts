@@ -266,7 +266,11 @@ class TreeSpawnManager extends hz.Component<typeof TreeSpawnManager> {
   private handleWoodDrops(player: hz.Player, position: hz.Vec3, config: HarvestableTreeConfig) {
     // Randomize if drops will occur
     const dropRoll = Math.random();
-    if (dropRoll > config.dropChance) {
+    if (!config?.dropChance || !config?.maxDrops || !config?.minDrops) {
+      console.error("[TreeSpawnManager] No config for wood drops!");
+      return;
+    }
+    if (dropRoll > config?.dropChance) {
       console.log(`[TreeSpawnManager] No drops this time (roll: ${dropRoll.toFixed(2)}, chance: ${config.dropChance})`);
       return;
     }

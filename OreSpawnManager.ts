@@ -1,5 +1,5 @@
 import * as hz from 'horizon/core';
-import { EventsService, ORE_TYPES, ORE_RARITY, HarvestableOreConfig } from 'constants';
+import { EventsService, ORE_TYPES, ORE_RARITY, HarvestableOreConfig, normalizeConfig, processHarvestHit } from 'constants';
 import { SoundFxBank } from 'SoundFxBank';
 import { IRequestOreHitPayload } from 'constants';
 import { VisualFxBank } from 'VisualFxBank';
@@ -281,7 +281,6 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
 
   // ---- Ore Hit Handler (Server-Side) ----
   private onOreHitRequest(data: IRequestOreHitPayload) {
-    console.error("WAAAWAAAA")
     const { toolType, hitPosition, player, oreEntity } = data;
 
     const oreId = (oreEntity as any)?.id;
@@ -295,13 +294,12 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
       return; // Ore not found or already despawned
     }
 
-    console.error("[OreSpawnManager] Found controller for ore ID:", key);
-    console.log("[OreSpawnManager] Ore config:", controller.config);
-    console.log("[OreSpawnManager] Tool type:", toolType);
+
+    const cfg = normalizeConfig(controller.config);
     // Validate tool compatibility
-    if (toolType !== controller.config.toolType) {
+    if (toolType !== cfg.toolType) {
       console.error(
-        `[OreSpawnManager] Wrong tool: ${toolType} (need ${controller.config.toolType})`
+        `[OreSpawnManager] Wrong tool: ${toolType} (need ${cfg.toolType})`
       );
       VisualFxBank.instance.playVFXAt("hit_dull", hitPosition, 0);
       SoundFxBank.instance.playSoundAt("hit_dull", hitPosition, 0);
@@ -309,14 +307,15 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
     }
 
     // Calculate damage (random within range)
-    const damage = Math.floor(
-      Math.random() *
-      (controller.config.maxDamagePerHit - controller.config.minDamagePerHit + 1) +
-      controller.config.minDamagePerHit
-    );
+    const { damage, newHealth, perHitDrops, depleted, depletionDrops } =
+      processHarvestHit(controller.currentHealth, cfg);
 
-    // Apply damage
-    controller.currentHealth -= damage;
+    controller.currentHealth = newHealth;
+
+    for (let i = 0; i < perHitDrops; i++) {
+      this.spawnOreChunk(this.getScatteredPosition(data.hitPosition, 0.75), cfg.dropItemId);
+    }
+
     if (controller.currentHealth < 0) controller.currentHealth = 0;
     SoundFxBank.instance.playSoundAt("ore_hit_success", hitPosition, 0);
     VisualFxBank.instance.playVFXAt("sparkle_star", hitPosition, 0);
@@ -333,12 +332,12 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
       healthRemaining: controller.currentHealth,
     });
 
-    // Roll for per-strike drop
-    this.rollForOreStrikeDrop(controller.config, hitPosition);
-
-    // Check if depleted
-    if (controller.currentHealth <= 0) {
-      this.handleOreDepletion(controller, player, hitPosition);
+    if (depleted) {
+      // guaranteed roll at depletion
+      for (let i = 0; i < depletionDrops; i++) {
+        this.spawnOreChunk(this.getScatteredPosition(data.hitPosition, 0.75), cfg.dropItemId);
+      }
+      this.handleOreDepletion(controller, data.player, data.hitPosition);
     }
   }
 
