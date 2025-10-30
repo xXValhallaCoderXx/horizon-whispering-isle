@@ -7,6 +7,7 @@ class OreSpawnController {
   isSpawned = false;
   spawnPosition?: hz.Vec3;
   spawnedEntities: hz.Entity[] = [];
+  spawnLocation?: hz.Entity;
 
   // Server-side state ONLY
   maxHealth: number = 0;
@@ -98,19 +99,27 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
     legendaryOreAsset: { type: hz.PropTypes.Asset },
     oreChunkAsset: { type: hz.PropTypes.Asset }, // Collectable ore drop
   };
+  // Add a simple knob to slow down respawns without touching your constants
+  private readonly RESPAWN_DELAY_MULTIPLIER = 1.5; // increase or decrease to taste
+  // Cooldown per spawn point (entity id -> timestamp ms)
+  private locationCooldowns: Map<string, number> = new Map();
 
-  private spawnPoints: hz.Entity[] = [];
+  // Separate spawn locations for each rarity
+  private commonSpawnPoints: hz.Entity[] = [];
+  private rareSpawnPoints: hz.Entity[] = [];
+  private legendarySpawnPoints: hz.Entity[] = [];
+
   private activeOres: OreSpawnController[] = [];
   private timer: number = 0;
 
   // Mapping from ore entity id (string) -> controller
   private entityToController: Map<string, OreSpawnController> = new Map();
 
-  // Rarity spawn weights (common > rare > legendary)
-  private readonly RARITY_WEIGHTS = {
-    [ORE_RARITY.COMMON]: 0.70,    // 70%
-    [ORE_RARITY.RARE]: 0.25,      // 25%
-    [ORE_RARITY.LEGENDARY]: 0.05, // 5%
+  // Spawn chance per tick for each rarity (rare/legendary spawn less often)
+  private readonly SPAWN_CHANCES = {
+    [ORE_RARITY.COMMON]: 0.8,      // 80% chance to spawn when location available
+    [ORE_RARITY.RARE]: 0.4,        // 40% chance to spawn when location available
+    [ORE_RARITY.LEGENDARY]: 0.15,  // 15% chance to spawn when location available
   };
 
   private toIdKey(id: unknown): string | null {
@@ -121,7 +130,15 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
     // Only the server should manage spawning
     if (!this.isOwnedByMe()) return;
 
-    this.spawnPoints = this.findUnderContainer(this.entity, "SpawnLocations");
+    // Find spawn locations for each rarity
+    this.commonSpawnPoints = this.findUnderContainer(this.entity, "CommonSpawnLocations");
+    this.rareSpawnPoints = this.findUnderContainer(this.entity, "RareSpawnLocations");
+    this.legendarySpawnPoints = this.findUnderContainer(this.entity, "LegendarySpawnLocations");
+
+    console.log(
+      `[OreSpawnManager] Found spawn points - Common: ${this.commonSpawnPoints.length}, ` +
+      `Rare: ${this.rareSpawnPoints.length}, Legendary: ${this.legendarySpawnPoints.length}`
+    );
 
     // Listen for ore hit requests
     this.connectNetworkBroadcastEvent(
@@ -149,16 +166,27 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
   private attemptSpawn(activeList: OreSpawnController[]) {
     this.cleanupInactiveControllers(activeList);
 
-    // Calculate max active ores
-    const maxActiveOres = Math.min(this.spawnPoints.length, 15); // Max 15 active ores
+    // Try spawning each rarity type
+    this.attemptSpawnRarity(ORE_RARITY.COMMON, this.commonSpawnPoints, activeList);
+    this.attemptSpawnRarity(ORE_RARITY.RARE, this.rareSpawnPoints, activeList);
+    this.attemptSpawnRarity(ORE_RARITY.LEGENDARY, this.legendarySpawnPoints, activeList);
+  }
 
-    if (activeList.length >= maxActiveOres) return;
+  private attemptSpawnRarity(
+    rarity: ORE_RARITY,
+    spawnPoints: hz.Entity[],
+    activeList: OreSpawnController[]
+  ) {
+    if (spawnPoints.length === 0) return;
 
-    const location = this.getAvailableSpawnLocation();
+    // Find available location for this rarity
+    const location = this.getAvailableSpawnLocation(spawnPoints);
     if (!location) return;
 
-    // Roll for ore rarity
-    const rarity = this.rollOreRarity();
+    // Roll spawn chance (rare/legendary spawn less frequently)
+    const spawnChance = this.SPAWN_CHANCES[rarity] || 1.0;
+    if (Math.random() > spawnChance) return;
+
     const config = ORE_TYPES[rarity];
     if (!config) {
       console.error(`[OreSpawnManager] Unknown ore rarity: ${rarity}`);
@@ -168,19 +196,6 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
     this.createAndSpawn(rarity, config, location, activeList);
   }
 
-  private rollOreRarity(): ORE_RARITY {
-    const roll = Math.random();
-    let cumulative = 0;
-
-    for (const [rarity, weight] of Object.entries(this.RARITY_WEIGHTS)) {
-      cumulative += weight;
-      if (roll <= cumulative) {
-        return rarity as ORE_RARITY;
-      }
-    }
-
-    return ORE_RARITY.COMMON; // Fallback
-  }
 
   private createAndSpawn(
     rarity: ORE_RARITY,
@@ -212,7 +227,7 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
 
     const controller = new hz.SpawnController(asset, position, rotation, hz.Vec3.one);
     const wrapper = new OreSpawnController(controller);
-
+    wrapper.spawnLocation = location;   // Remember which spawn point was used so we can cooldown that point later
     // Randomize health within range
     const health = Math.floor(
       Math.random() * (config.maxHealth - config.minHealth + 1) + config.minHealth
@@ -329,6 +344,12 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
     const config = controller.config;
     if (!config) return;
 
+    const loc = controller.spawnLocation;
+    const locKey = loc ? this.toIdKey((loc as any).id) : null;
+    if (locKey) {
+      const delay = Math.round(config.regenTimeMs * this.RESPAWN_DELAY_MULTIPLIER);
+      this.locationCooldowns.set(locKey, Date.now() + delay);
+    }
     console.log(`[OreSpawnManager] Ore depleted! Rarity: ${controller.oreRarity}`);
 
     // Broadcast depletion event
@@ -480,12 +501,11 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
     }
   }
 
-  private getAvailableSpawnLocation(): hz.Entity | null {
-    const locations = this.spawnPoints;
-    if (locations.length === 0) return null;
+  private getAvailableSpawnLocation(spawnPoints: hz.Entity[]): hz.Entity | null {
+    if (spawnPoints.length === 0) return null;
 
     // Shuffle to randomize spawn points
-    const shuffled = [...locations];
+    const shuffled = [...spawnPoints];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -493,10 +513,24 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
 
     // Find first unoccupied location
     for (const loc of shuffled) {
+      // Skip spawn points still on cooldown
+      if (this.isLocationOnCooldown(loc)) continue;
       if (!this.isLocationOccupied(loc)) return loc;
     }
 
     return null; // All occupied
+  }
+
+  private isLocationOnCooldown(location: hz.Entity): boolean {
+    const key = this.toIdKey((location as any)?.id);
+    if (!key) return false;
+    const until = this.locationCooldowns.get(key);
+    if (!until) return false;
+    if (Date.now() >= until) {
+      this.locationCooldowns.delete(key);
+      return false;
+    }
+    return true;
   }
 
   private isLocationOccupied(location: hz.Entity): boolean {

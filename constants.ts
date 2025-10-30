@@ -518,7 +518,7 @@ export const ORE_TYPES: { [key: string]: HarvestableOreConfig } = {
         minDamagePerHit: 1,
         maxDamagePerHit: 3,
 
-        regenTimeMs: 20000, // 20 seconds
+        regenTimeMs: 15000, // 15 seconds
         oreItemId: ITEM_TYPES.COMMON_ORE
     },
 

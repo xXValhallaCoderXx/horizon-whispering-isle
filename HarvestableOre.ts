@@ -1,17 +1,19 @@
 import { EventsService } from 'constants';
-import { Component, PropTypes, CodeBlockEvents, Entity, Vec3, Player, AudioGizmo } from 'horizon/core';
+import { Component, PropTypes, CodeBlockEvents, Entity, Vec3, Player, AudioGizmo, ParticleGizmo } from 'horizon/core';
 
 class HarvestableOre extends Component<typeof HarvestableOre> {
   static propsDefinition = {
     oreCrumbleSfx1: { type: PropTypes.Entity },
     oreCrumbleSfx2: { type: PropTypes.Entity },
     oreCrumbleSfx3: { type: PropTypes.Entity },
+    crumbleVfx: { type: PropTypes.Entity },
   };
 
   private lastHitTime: number = 0;
   private hitCooldown: number = 500; // ms
 
   private crumbleSfxs: (AudioGizmo | undefined)[] = [];
+  private crumbleVfx?: ParticleGizmo;
 
   preStart(): void {
 
@@ -42,6 +44,8 @@ class HarvestableOre extends Component<typeof HarvestableOre> {
       this.props.oreCrumbleSfx2,
       this.props.oreCrumbleSfx3,
     ].map(e => e?.as(AudioGizmo));
+
+    this.crumbleVfx = this.props.crumbleVfx?.as(ParticleGizmo);
   }
 
 
@@ -78,7 +82,7 @@ class HarvestableOre extends Component<typeof HarvestableOre> {
   }
 
   private onOreDepleted(payload: any) {
-    console.log("[ORE]  - onOreDepleted invoked", payload);
+    console.error("[ORE]  - onOreDepleted invoked", payload);
     console.error("[ORE]  - onOreDepleted not yet implemented", payload);
     // Play a random crumble SFX
     const validSfxs = this.crumbleSfxs.filter(sfx => sfx !== undefined) as AudioGizmo[];
@@ -88,6 +92,8 @@ class HarvestableOre extends Component<typeof HarvestableOre> {
     const selectedSfx = validSfxs[randomIndex];
     // Add a small 200 ms delay before playing the sound
     this.async.setTimeout(() => {
+      this.crumbleVfx?.position.set(this.entity.position.get());
+      this.crumbleVfx?.play({ oneShot: true });
       selectedSfx.play();
     }, 500);
 
