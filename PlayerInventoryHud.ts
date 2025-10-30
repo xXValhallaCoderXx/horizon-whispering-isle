@@ -34,7 +34,7 @@ export class PlayerInventoryHud extends UIComponent<typeof PlayerInventoryHud> {
       this.toggleInventory = PlayerControls.connectLocalInput(PlayerInputAction.RightSecondary, ButtonIcon.Menu, this, { preferredButtonPlacement: ButtonPlacement.Center });
       this.toggleInventory.registerCallback((action, pressed) => {
         if (pressed) {
-          this.onDebugTogglePressed();
+          this.onTogglePressed();
         }
       });
     }
@@ -105,8 +105,6 @@ export class PlayerInventoryHud extends UIComponent<typeof PlayerInventoryHud> {
               height: size,
               borderWidth: SLOT_BORDER_WIDTH,
               borderColor: SLOT_BORDER_COLOR,
-              // Optional: enable if your runtime supports RGBA colors for a subtle fill:
-              // backgroundColor: Color.rgba(0, 0, 0, 0.18),
             },
           })
         )
@@ -116,18 +114,6 @@ export class PlayerInventoryHud extends UIComponent<typeof PlayerInventoryHud> {
   }
 
   start() {
-    // Listen for inventory display events
-    this.connectNetworkEvent(
-      this.entity.owner.get(),
-      EventsService.UIEvents.TogglePlayerUI,
-      (data: { player: Player, visible: boolean }) => {
-        const localPlayer = this.world.getLocalPlayer();
-        if (localPlayer && this.entity.owner.get() === localPlayer) {
-          this.setVisible(data.visible);
-        }
-      }
-    );
-
     this.connectNetworkEvent(
       this.entity.owner.get(),
       EventsService.PlayerEvents.RefreshInventoryHUD,
@@ -149,23 +135,15 @@ export class PlayerInventoryHud extends UIComponent<typeof PlayerInventoryHud> {
     this.isVisibleBinding.set(visible);
   }
 
-  onDebugTogglePressed() {
 
-
-
-    const currentVisibility = this.entity.visible.get()
-
-    this.setVisible(!currentVisibility);
-    this.entity.visible.set(!currentVisibility);
-  }
 
   /**
    * Toggles the inventory visibility when RightTertiary button is pressed.
    */
-  private onToggleInventory() {
-    const currentVisibility = this.isVisibleBinding;
-    console.log("Toggling Inventory HUD. Current visibility:", currentVisibility);
+  onTogglePressed() {
+    const currentVisibility = this.entity.visible.get()
     this.setVisible(!currentVisibility);
+    this.entity.visible.set(!currentVisibility);
   }
 
   /**
