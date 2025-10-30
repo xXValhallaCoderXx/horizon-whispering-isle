@@ -24,7 +24,7 @@ export class SoundFxBank extends Component<typeof SoundFxBank> {
   static instance: SoundFxBank;
 
   private pools: Map<string, AudioGizmoPool> = new Map();
-
+  private static readonly SPAWN_QUARANTINE = new Vec3(0, -1000, 0);
   preStart() {
     SoundFxBank.instance = this;
   }
@@ -55,13 +55,12 @@ export class SoundFxBank extends Component<typeof SoundFxBank> {
     const newPool = new AudioGizmoPool(poolSize);
     this.pools.set(soundId, newPool);
 
-    // --- These are the defaults your SpawnController constructor needs ---
-    const spawnPos = new Vec3(0, -1000, 0); // We'll move them anyway
+    // Quarantine spawn far below the map
+    const spawnPos = SoundFxBank.SPAWN_QUARANTINE;
     const spawnRot = Quaternion.one;
     const spawnScale = Vec3.one;
 
     for (let i = 0; i < poolSize; i++) {
-      // --- This is the CORRECT, 4-argument constructor ---
       const spawnController = new SpawnController(asset, spawnPos, spawnRot, spawnScale);
       try {
         await spawnController.load();
@@ -72,12 +71,9 @@ export class SoundFxBank extends Component<typeof SoundFxBank> {
         if (gizmoEntities.length > 0) {
           const audioGizmo = gizmoEntities[0].as(AudioGizmo);
           if (audioGizmo) {
-
-            // --- SAFETY NET ---
-            // This stops sounds playing on load, but the *real* fix
-            // is unchecking "Play on Start" on the asset itself.
+            // Ensure nothing slips through at startup
+            this.setWorldPos(audioGizmo, SoundFxBank.SPAWN_QUARANTINE);
             audioGizmo.stop();
-
             newPool.gizmos.push(audioGizmo);
           } else {
             console.warn(`Spawned asset for '${soundId}' is not an AudioGizmo.`);
@@ -125,24 +121,32 @@ export class SoundFxBank extends Component<typeof SoundFxBank> {
   public playSoundAt(soundId: string, position: Vec3, heightOffset: number = 0) {
     console.log("[SoundFxBank] Attempting Playing sound at position:", soundId, position);
     const gizmo = this.getNextGizmo(soundId);
-    if (gizmo) {
-      // Apply the offset
-      console.log("[SoundFxBank] Playing sound at position:", soundId, position);
+   if (gizmo) {
       const playPos = new Vec3(position.x, position.y + heightOffset, position.z);
-      gizmo.position.set(playPos);
+      // Set world position to escape any quarantined parent transform
+      this.setWorldPos(gizmo, playPos);
       gizmo.play();
     }
   }
 
-  /**
-   * Plays a sound only for a specific player.
-   */
   public playSoundForPlayer(soundId: string, player: Player) {
     console.log("[SoundFxBank] Attempting Playing sound for player:", soundId, player.name.get());
     const gizmo = this.getNextGizmo(soundId);
     if (gizmo) {
-      console.log("[SoundFxBank] Playing sound for player:", soundId, player.name.get());
+      // Place at the player's location in world space to be safe
+      const p = player.position.get();
+      const playPos = new Vec3(p.x, p.y + 1.6, p.z);
+      this.setWorldPos(gizmo, playPos);
       gizmo.play({ players: [player], fade: 0 });
+    }
+  }
+
+  private setWorldPos(gizmo: AudioGizmo, pos: Vec3) {
+    const anyG = gizmo as any;
+    if (anyG.worldPosition?.set) {
+      anyG.worldPosition.set(pos);
+    } else {
+      gizmo.position.set(pos);
     }
   }
 }
