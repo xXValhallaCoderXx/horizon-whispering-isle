@@ -1736,6 +1736,14 @@ export declare class Entity {
      * @returns a Bounds object encompassing all colliders under an entity
      */
     getPhysicsBounds(): Bounds;
+    /**
+     * Whether or not the entity is still a valid entity reference, and hasn't been disposed.
+     * Useful in asynchronous contexts (async/awaits, promise.then's, and networkEvents).
+     *
+     * @returns A boolean, whether or not the entity is still valid this frame.
+     * If false, all bridge calls referencing this entity will throw an exception.
+     */
+    isValidReference: ReadableHorizonProperty<boolean>;
 }
 /**
  * An Asset Pool gizmo
@@ -1996,6 +2004,46 @@ export declare class ParticleGizmo extends Entity {
      * ```
      */
     setVFXParameterValue<T extends VFXParameterType>(name: string, value: T, options?: ParticleFXSetParameterOptions): Promise<undefined>;
+    /**
+       * Batch call to configure PopcornFX parameters.
+       * @param options - See {@link ParticleFXSetParametersOptions}
+       *
+       * @example Note that the parameters must be valid parameter values for the particle effect.
+       * ```
+         particleGizmo.setVFXParameterValues({
+           players: [player1, player2],
+           parameters: [
+             {name: 'distance', value: 5},
+             {name: 'end_radius', value: 10,
+             {name: 'color', value: [255, 255, 255, 0]}
+           ]
+         })
+       * ```
+       */
+    setVFXParameterValues(options: ParticleFXSetParametersOptions): Promise<undefined>;
+    /**
+       * Set the transform of the PopcornFX, configure parameters and play.
+       *
+       * @param options - See {@link ParticleFXSetParametersAndPlayOptions}
+       *
+       * @example Note that the parameters must be valid parameter values for the particle effect.
+       * ```
+         particleGizmo.setVFXParameterValuesAndPlay({
+           fromStart: true,
+           oneShot: false,
+           localOnly: true,
+           players: [player1, player2],
+           position: new hz.Vec3(5, 10, -5),
+           rotation: Quaternion.fromEuler(new Vec3(0, 90, 0)),
+           parameters: [
+             {name: 'distance', value: 5},
+             {name: 'end_radius', value: 10,
+             {name: 'color', value: [255, 255, 255, 0]}
+           ]
+         })
+       * ```
+       */
+    setVFXParameterValuesAndPlay(options: ParticleFXSetParametersAndPlayOptions): Promise<undefined>;
     /**
      * Gets all custom PopcornFX parameters for the particle effect.
      *
@@ -3332,6 +3380,60 @@ export declare type FocusUIOptions = {
     fillPercentage?: number;
 };
 /**
+ * The options used when a movement command is issued to the NPC.
+ */
+export declare type LocomotionOptions = {
+    /**
+     * The NPC's movement speed in meter per second. Defaults to 4.5 m/s.
+     * This value is caped by the player's max speed or an absolute cap of 45 m/s.
+     */
+    movementSpeed?: number;
+    /**
+     * The time in seconds to travel from the NPC's current position to the final position.
+     * The NPC's movement speed will vary to achieve this goal.
+     */
+    travelTime?: number;
+    /**
+     * The NPC's acceleration in m/s^2. Defaults to 30 m/s^2.
+     */
+    acceleration?: number;
+    /**
+     * The NPC's deceleration in m/s^2. Deftaults to 15 m/s^2
+     */
+    deceleration?: number;
+    faceMovementDirection?: boolean;
+};
+/**
+ * The possible results of a move action for an NPC.
+ */
+export declare enum LocomotionResult {
+    /**
+     * The action is complete.
+     */
+    Complete = 0,
+    /**
+     * The action is canceled.
+     */
+    Canceled = 1,
+    /**
+     * An error occured when attempting the action.
+     */
+    Error = 2
+}
+/**
+ * The options that can be specified when issuing a rotation command to an NPC.
+ */
+export declare type RotationOptions = {
+    /**
+     * The NPC's rotation speed in degrees per second.
+     */
+    rotationSpeed?: number;
+    /**
+     * The amount of time in seconds for the NPC to complete the desired rotation.
+     */
+    rotationTime?: number;
+};
+/**
  * Represents a player in the world. This is the primary class for managing
  * an individual player's physical presence and game play in the world,
  * including their avatar.
@@ -3342,16 +3444,29 @@ export declare class Player {
      */
     readonly id: number;
     /**
+     * The player's ID.
+     */
+    readonly entity?: Entity;
+    /**
      * Creates a player in the world.
      * @param id - The ID of the player.
+     * @param entity - An optional NPC Gizmo entity associated with the player.
      * @returns The new player.
      */
-    constructor(id: number);
+    constructor(id: number, entity?: Entity);
     /**
      * Creates a human-readable representation of the player.
      * @returns A string representation of the player.
      */
     toString(): string;
+    /**
+     * Whether or not the player is still a valid player reference, and hasn't been disposed.
+     * Useful in asynchronous contexts (async/awaits, promise.then's, and networkEvents).
+     *
+     * @returns A boolean, whether or not the player is still valid this frame.
+     * If false, all bridge calls referencing this Player will throw an exception.
+     */
+    isValidReference: ReadableHorizonProperty<boolean>;
     /**
      * The player's head.
      */
@@ -3463,11 +3578,60 @@ export declare class Player {
      */
     gravity: HorizonProperty<number>;
     /**
+     * Indicates whether the player is moving.
+     */
+    isMoving: ReadableHorizonProperty<boolean>;
+    /**
+     * Indicates whether the player is moving using scripted navigation.
+     */
+    isNavigating: ReadableHorizonProperty<boolean>;
+    /**
      * Indicates whether the player is grounded (touching a floor).
      * If a player is grounded then gravity has no effect on their velocity.
      * @returns true if the player is grounded; otherwise, false.
      */
     isGrounded: ReadableHorizonProperty<boolean>;
+    /**
+     * Indicates whether the NPC is performing a jump.
+     */
+    isJumping: ReadableHorizonProperty<boolean>;
+    /**
+     * Issues a movement command to the player. Issuing a new move, rotate, follow, or jump command cancels any previous move command.
+     * @param position - The desired destination.
+     * @param options - Optional parameters.
+     * @returns - A promise describing how the locomotion ended.
+     */
+    moveToPosition(position: Vec3, options?: LocomotionOptions): Promise<LocomotionResult>;
+    /**
+     * Issues a movement command along a path. Issuing a new move, rotate, follow, or jump command cancels any previous move command.
+     * @param path - An array of points to follow, in order.
+     * @param options - Optional parameters
+     * @returns - A promise describing how the locomotion ended.
+     */
+    moveToPositions(path: Array<Vec3>, options?: LocomotionOptions): Promise<LocomotionResult>;
+    /**
+     * Issues a rotation command to change the direction the player faces. Issuing a new move, rotate, follow, or jump command cancels any previous move command.
+     * @param direction - The desired facing direction.
+     * @param options - Optional parameters.
+     * @returns - A promise describing how the rotation ended.
+     */
+    rotateTo(direction: Vec3, options?: RotationOptions): Promise<LocomotionResult>;
+    /**
+     * Issues a rotation command to rotate the NPC by a given angle in degrees. Issuing a new move, rotate, follow, or jump command cancels any previous move command.
+     * @param angle - The desired angle change in degrees.
+     * @param options - Optional parameters.
+     * @returns - A promise describing how the rotation ended.
+     */
+    rotateBy(angle: number, options?: RotationOptions): Promise<LocomotionResult>;
+    /**
+     * Stops any movement in progress.
+     */
+    stopMovement(): void;
+    /**
+     * Issues a jump command.
+     * @returns A promise describing how the jump ended.
+     */
+    jump(): Promise<LocomotionResult>;
     /**
      * The speed at which the player moves, in meters per second.
      *

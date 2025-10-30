@@ -134,13 +134,6 @@ export class PlayerHealthHUD extends UIComponent<typeof PlayerHealthHUD> {
         }
       });
 
-
-    const localPlayer = this.world.getLocalPlayer();
-    if (localPlayer && this.entity.owner.get() === localPlayer) {
-      const deviceType = localPlayer.deviceType.get()
-    }
-
-
   }
 
 

@@ -181,11 +181,16 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       if (inventoryDAO && inventoryDAO.getIsStorageBagAcquired()) {
         inventoryDAO.addItem(itemId, amount);
         console.log(`[QuestManager] Added ${amount}x ${itemId} to inventory`);
-        console.error("ENTITY ID: ", entityId)
+
         // Play feedback
         if (entityId) {
+          const latestInventory = inventoryDAO.getAllItems()
           this.playCollectionSoundForPlayer(player, entityId);
           this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+          this.sendNetworkEvent(player, EventsService.PlayerEvents.RefreshInventoryHUD, {
+            player,
+            inventory: latestInventory,
+          });
         }
 
         // Optional: show popup
@@ -196,7 +201,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       return false; // Still return false for quest purposes, but item was collected
     }
 
-    console.log("ACTIVE Quest ID: ", activeQuestId);
+
 
     const quest = questDAO.getQuestLog(activeQuestId);
     if (!quest || quest.status !== QuestStatus.InProgress) {
@@ -228,8 +233,13 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
         // Play feedback
         if (entityId) {
+          const latestInventory = inventoryDAO.getAllItems()
           this.playCollectionSoundForPlayer(player, entityId);
           this.sendNetworkBroadcastEvent(EventsService.AssetEvents.DestroyAsset, { entityId, player });
+          this.sendNetworkEvent(player, EventsService.PlayerEvents.RefreshInventoryHUD, {
+            player,
+            inventory: latestInventory,
+          });
         }
 
         // Optional: show popup

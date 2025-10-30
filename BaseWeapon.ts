@@ -1,6 +1,7 @@
 import {
   Entity,
   Component,
+  AudioGizmo,
   Player,
   PropTypes,
   CodeBlockEvents,
@@ -9,6 +10,8 @@ import {
   AvatarGripPoseAnimationNames,
   EntityInteractionMode,
   LocalEvent,
+  Vec3,
+  ParticleGizmo
 } from "horizon/core";
 import { EventsService } from "constants";
 import { StartAttackingPlayer, StopAttackingPlayer } from "EnemyNPC";
@@ -21,17 +24,46 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     damage: { type: PropTypes.Number, default: 25 },
     reach: { type: PropTypes.Number, default: 2.0 },
     weight: { type: PropTypes.Number, default: 5 },
-    toolType: { type: PropTypes.String, default: "" }, // "axe", "sword", "pickaxe"
-    isHarvestTool: { type: PropTypes.Boolean, default: false }, // true for axes
+    type: { type: PropTypes.String, default: "" }, // "axe", "sword", "pickaxe"
+    hitSparkEffect: { type: PropTypes.Entity },
+    hitRingEffect: { type: PropTypes.Entity },
+    hitResourceDullEffect: { type: PropTypes.Entity },
+    hitResourceOreSuccessEffect: { type: PropTypes.Entity },
+    baseCooldownMs: { type: PropTypes.Number, default: 500 }, // Base cooldown in milliseconds
+    weightMultiplier: { type: PropTypes.Number, default: 50 },
+    hitCooldownMs: { type: PropTypes.Number, default: 100 }, // Minimum time between hits
   };
   private owner: Player | null = null;
 
+  private hitSparkVfx?: ParticleGizmo | null = null;
+  private hitRingVfx?: ParticleGizmo | null = null;
+  private hitResourceDullSfx?: AudioGizmo | null = null;
+  private hitResourceOreSuccessSfx?: AudioGizmo | null = null;
+  private lastSwingTime: number = 0; // Track when the last swing occurred
+  private isSwinging: boolean = false; // Track if currently swinging
+
+  private lastHitTime: number = 0;
+  private hitEntitiesThisSwing: Set<Entity> = new Set(); // Track what we've hit this swing
+  private currentSwingId: number = 0; // Unique ID for each swing
+
+
   preStart(): void {
+    this.hitRingVfx = this.props.hitRingEffect?.as(ParticleGizmo);
+    this.hitSparkVfx = this.props.hitSparkEffect?.as(ParticleGizmo);
+    this.hitResourceDullSfx = this.props.hitResourceDullEffect?.as(AudioGizmo);
+    this.hitResourceOreSuccessSfx = this.props.hitResourceOreSuccessEffect?.as(AudioGizmo);
+
     this.connectCodeBlockEvent(
       this.entity,
       CodeBlockEvents.OnGrabStart,
       (isRightHand: boolean, player: Player) =>
         this.onGrabStart(isRightHand, player)
+    );
+
+    this.connectCodeBlockEvent(
+      this.entity,
+      CodeBlockEvents.OnEntityCollision,
+      (collideWith: Entity, collideAt: Vec3) => this.handleEntityCollision(collideWith, collideAt)
     );
 
     // When the player releases this item (for any reason), intercept the drop.
@@ -63,31 +95,68 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
   }
 
   start() {
+
     try {
       this.entity.visible.set(true);
-    } catch {
-      console.warn(
-        `[BaseWeapon] Failed to set visibility for ${this.entity.name.get()}`
-      );
-    }
-    try {
       this.entity.collidable.set(true);
-    } catch {
-      console.error(
-        `[BaseWeapon] Failed to set collidable for ${this.entity.name.get()}`
-      );
-    }
-    try {
       this.entity.interactionMode.set(EntityInteractionMode.Both);
     } catch {
-      console.warn(
-        `[BaseWeapon] Failed to set interactionMode for ${this.entity.name.get()}`
+      console.error(
+        `[BaseWeapon] Failed to initialize for ${this.entity.name.get()}`
       );
     }
+
   }
 
   public getOwner(): Player | null {
     return this.owner;
+  }
+
+  private getSwingCooldown(): number {
+    return this.props.baseCooldownMs + (this.props.weight * this.props.weightMultiplier);
+  }
+
+  private canSwing(): boolean {
+    const now = Date.now();
+    const cooldown = this.getSwingCooldown();
+    return !this.isSwinging && (now - this.lastSwingTime) >= cooldown;
+  }
+
+  private handleEntityCollision(collideWith: Entity, collideAt: Vec3) {
+    // Only process hits during active swings
+    if (!this.isSwinging) return;
+
+    // Prevent hitting the same entity multiple times in one swing
+    if (this.hitEntitiesThisSwing.has(collideWith)) {
+      return;
+    }
+
+    // Prevent rapid successive hits (debounce)
+    const now = Date.now();
+    if (now - this.lastHitTime < this.props.hitCooldownMs) {
+      return;
+    }
+
+    // Mark this entity as hit for this swing
+    this.hitEntitiesThisSwing.add(collideWith);
+    this.lastHitTime = now;
+
+    const entityName = collideWith.name.get();
+    const baseName = entityName.split("_")[0].toLowerCase();
+    const toolType = this.props.type.toLowerCase();
+
+    console.log(`[BaseWeapon] Hit ${entityName} (base: ${baseName}) with ${toolType}`);
+
+    if (baseName === "ore" && toolType !== "pickaxe") {
+      this.hitResourceDullSfx?.play();
+      this.hitRingVfx?.play();
+    } else if (baseName === "tree" && toolType !== "axe") {
+      this.hitResourceDullSfx?.play();
+      this.hitRingVfx?.play();
+    } else {
+      this.hitResourceOreSuccessSfx?.play();
+      this.hitSparkVfx?.play();
+    }
   }
 
 
@@ -96,19 +165,41 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
   private onFirePressed(player: Player) {
     if (!this.isHeld()) return;
 
+    if (!this.canSwing()) {
+      // Optional: Play a "blocked" sound or visual feedback
+      console.log(`[BaseWeapon] Swing blocked - cooldown: ${this.getSwingCooldown()}ms`);
+      return;
+    }
+
+    this.isSwinging = true;
+    this.lastSwingTime = Date.now();
+    this.currentSwingId++; // Increment swing ID
+    this.hitEntitiesThisSwing.clear(); // Clear hit entities for new swing
+
+
     this.entity.owner
       .get()
       .playAvatarGripPoseAnimationByName(AvatarGripPoseAnimationNames.Fire);
 
+    const swingDuration = Math.max(150, 250 + (this.props.weight * 10)); // Minimum 150ms, increases with weight
+
     this.sendNetworkBroadcastEvent(EventsService.CombatEvents.AttackSwingEvent, {
       owner: player,
       weapon: this.entity,
-      damage: this.props.damage, // Was 25
-      reach: this.props.reach, // Was 2.0
-      durationMs: 250, // Was 250
-      toolType: this.props.toolType,        // NEW
-      isHarvestTool: this.props.isHarvestTool, // NEW
+      damage: this.props.damage,
+      reach: this.props.reach,
+      durationMs: 250, // Was 250 TODO  - Check if we can pass this in from the props
+      type: this.props.type,
+
     });
+
+    // End swing after duration
+    this.async.setTimeout(() => {
+      this.isSwinging = false;
+      this.hitEntitiesThisSwing.clear(); // Clean up at end of swing
+    }, swingDuration);
+
+
   }
 
   // ** ADD THIS: Pass input to components **

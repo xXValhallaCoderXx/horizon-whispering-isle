@@ -11,6 +11,7 @@ export class EventsService {
     static readonly PlayerEvents = {
         OnPlayerStateLoaded: new LocalEvent<{ player: Player }>('player.on_player_state_loaded'),
         DisplayHealthHUD: new NetworkEvent<{ player: Player; currentHealth: number; maxHealth: number; name: string }>('player.display_health_hud'),
+        RefreshInventoryHUD: new NetworkEvent<{ player: Player; stats?: any; inventory?: any }>('player.refresh_inventory_hud'),
     }
 
     static readonly CameraEvents = {
@@ -20,6 +21,21 @@ export class EventsService {
         TreeHit: new NetworkEvent<ITreeHitPayload>('harvest.tree_hit'),
         TreeDepleted: new NetworkEvent<ITreeDepletedPayload>('harvest.tree_depleted'),
         SpawnLog: new NetworkEvent<ISpawnLogPayload>('harvest.spawn_log'), // NEW
+        OreHit: new NetworkEvent<IOreHitPayload>('harvest.ore_hit'),
+        OreDepleted: new NetworkEvent<IOreDepletedPayload>('harvest.ore_depleted'),
+        RequestOreHit: new NetworkEvent<IRequestOreHitPayload>('harvest.request_ore_hit'),
+
+
+
+
+
+
+
+
+        // Server -> OreSpawnManager: Spawn ore chunk/drop
+        SpawnOreChunk: new NetworkEvent<ISpawnOreChunkPayload>('mining.spawn_ore_chunk'),
+
+
     };
 
 
@@ -71,6 +87,39 @@ export class EventsService {
         console.log(`[EventsService] ${eventName}:`, JSON.stringify(payload, null, 2));
     }
 }
+
+export type IRequestOreHitPayload = {
+    player: Player;
+    oreEntity: Entity;
+    oreRarity: string;
+    toolType: string;
+    hitPosition: Vec3;
+};
+
+export type IOreHitPayload = {
+    player: Player;
+    oreEntity: Entity;
+    hitPosition: Vec3;
+    damage: number;
+    healthRemaining: number;
+};
+
+export type IOreDepletedPayload = {
+    player: Player;
+    oreEntity: Entity;
+    position: Vec3;
+    oreRarity: string;
+};
+
+export type ISpawnOreChunkPayload = {
+    position: Vec3;
+    itemId: string;
+};
+
+export type IOreWrongToolPayload = {
+    player: Player;
+    oreEntity: Entity;
+};
 
 
 
@@ -141,10 +190,9 @@ export type IAttackSwingPayload = {
     weapon: Entity;
     owner: Player;
     damage: number;
-    reach?: number;        // meters
-    durationMs?: number;   // swing active window
-    toolType?: string;     // "axe", "sword", "pickaxe"
-    isHarvestTool?: boolean; // true for axes
+    reach?: number;
+    durationMs?: number;
+    type?: string;
 }
 export type INPCDeath = {
     targetNpcId: string;
@@ -242,6 +290,9 @@ export enum ITEM_TYPES {
     CHICKEN_MEAT = 'chicken_meat',
     RAW_WOOD_LOG = 'raw_wood_log',
     COCONUT = 'coconut',
+    COMMON_ORE = 'common_ore',
+    RARE_ORE = 'rare_ore',
+    LEGENDARY_ORE = 'legendary_ore',
 }
 
 export const SPAWNABLE_ITEMS: { [key: string]: SpawnableItemConfig } = {
@@ -298,6 +349,27 @@ export const ITEMS: { [key: string]: ItemConfig } = {
         type: 'material',
         value: 10,
         description: 'A log of raw wood'
+    },
+    common_ore: {
+        id: ITEM_TYPES.COMMON_ORE,
+        label: 'Common Ore',
+        type: 'material',
+        value: 10,
+        description: 'A common chunk of ore'
+    },
+    rare_ore: {
+        id: ITEM_TYPES.RARE_ORE,
+        label: 'Rare Ore',
+        type: 'material',
+        value: 50,
+        description: 'A rare and valuable ore'
+    },
+    legendary_ore: {
+        id: ITEM_TYPES.LEGENDARY_ORE,
+        label: 'Legendary Ore',
+        type: 'material',
+        value: 200,
+        description: 'An extremely rare and precious ore'
     }
 };
 
@@ -368,6 +440,39 @@ export interface HarvestableTreeConfig {
     logItemId: string; // References ITEMS
 }
 
+export enum ORE_RARITY {
+    COMMON = 'common',
+    RARE = 'rare',
+    LEGENDARY = 'legendary',
+}
+
+export interface HarvestableOreConfig {
+    rarity: ORE_RARITY;
+    toolType: string; // Required tool (e.g., "pickaxe")
+    minHealth: number;
+    maxHealth: number;
+
+    // Per-strike drop config
+    dropChancePerStrike: number; // 0.0 to 1.0
+    minDropsPerStrike: number;
+    maxDropsPerStrike: number;
+
+    // Depletion drop config
+    dropChanceOnDepletion: number;
+    minDropsOnDepletion: number;
+    maxDropsOnDepletion: number;
+
+    // Damage config (simple for now)
+    minDamagePerHit: number; // Min damage per valid strike
+    maxDamagePerHit: number; // Max damage per valid strike
+
+    regenTimeMs: number; // Time before ore can respawn
+    oreItemId: string; // References ITEMS
+
+    // Optional: future skill requirements
+    skillRequired?: number; // Placeholder for player skill level
+}
+
 export const TREE_TYPES: { [key: string]: HarvestableTreeConfig } = {
     [TREES.OAK]: {
         treeType: TREES.OAK,
@@ -388,5 +493,82 @@ export const TREE_TYPES: { [key: string]: HarvestableTreeConfig } = {
         maxDrops: 2,
         regenTimeMs: 20000,
         logItemId: ITEM_TYPES.RAW_WOOD_LOG
+    }
+};
+
+
+export const ORE_TYPES: { [key: string]: HarvestableOreConfig } = {
+    [ORE_RARITY.COMMON]: {
+        rarity: ORE_RARITY.COMMON,
+        toolType: 'pickaxe',
+        minHealth: 3,
+        maxHealth: 5,
+
+        // 20% chance per strike to drop 1 ore
+        dropChancePerStrike: 0.2,
+        minDropsPerStrike: 1,
+        maxDropsPerStrike: 1,
+
+        // 70% chance on depletion to drop 1-2 ore
+        dropChanceOnDepletion: 0.7,
+        minDropsOnDepletion: 1,
+        maxDropsOnDepletion: 2,
+
+        // Damage per hit: 1-3
+        minDamagePerHit: 1,
+        maxDamagePerHit: 3,
+
+        regenTimeMs: 20000, // 20 seconds
+        oreItemId: ITEM_TYPES.COMMON_ORE
+    },
+
+    [ORE_RARITY.RARE]: {
+        rarity: ORE_RARITY.RARE,
+        toolType: 'pickaxe',
+        minHealth: 5,
+        maxHealth: 8,
+
+        // 15% chance per strike to drop 1 ore
+        dropChancePerStrike: 0.15,
+        minDropsPerStrike: 1,
+        maxDropsPerStrike: 1,
+
+        // 50% chance on depletion to drop 1-3 ore
+        dropChanceOnDepletion: 0.5,
+        minDropsOnDepletion: 1,
+        maxDropsOnDepletion: 3,
+
+        // Damage per hit: 1-2 (harder to mine)
+        minDamagePerHit: 1,
+        maxDamagePerHit: 2,
+
+        regenTimeMs: 40000, // 40 seconds
+        oreItemId: ITEM_TYPES.RARE_ORE,
+        skillRequired: 5 // Placeholder
+    },
+
+    [ORE_RARITY.LEGENDARY]: {
+        rarity: ORE_RARITY.LEGENDARY,
+        toolType: 'pickaxe',
+        minHealth: 8,
+        maxHealth: 12,
+
+        // 10% chance per strike to drop 1 ore
+        dropChancePerStrike: 0.1,
+        minDropsPerStrike: 1,
+        maxDropsPerStrike: 1,
+
+        // 30% chance on depletion to drop 1-2 ore (very rare!)
+        dropChanceOnDepletion: 0.3,
+        minDropsOnDepletion: 1,
+        maxDropsOnDepletion: 2,
+
+        // Damage per hit: 1-2 (very hard to mine)
+        minDamagePerHit: 1,
+        maxDamagePerHit: 2,
+
+        regenTimeMs: 60000, // 60 seconds
+        oreItemId: ITEM_TYPES.LEGENDARY_ORE,
+        skillRequired: 10 // Placeholder
     }
 };
