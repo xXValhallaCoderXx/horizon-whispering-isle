@@ -120,14 +120,11 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     if (this.hitEntitiesThisSwing.has(collideWith)) {
       return;
     }
-
-    console.log(`[BaseWeapon] Processing hit on ${collideWith.name.get()}`);
     // Prevent rapid successive hits (debounce)
     const now = Date.now();
     if (now - this.lastHitTime < this.props.hitCooldownMs) {
       return;
     }
-    console.log(`[BaseWeapon] Hit cooldown passed for ${collideWith.name.get()}`);
 
     // Mark this entity as hit for this swing
     this.hitEntitiesThisSwing.add(collideWith);
@@ -136,6 +133,21 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     console.log(`[BaseWeapon] Sending RequestOreHit for ${collideWith.name.get()}`);
 
     const entityName = collideWith.name.get().toLowerCase();
+
+    if (entityName.startsWith('enemy')) {
+      if (!this.owner) return;
+      const monsterId = this.toEntityIdString((collideWith.parent.get() as any)?.id);
+      console.log(`[BaseWeapon] Valid monster hit detected: ${entityName} (ID: ${monsterId})`);
+      if (!monsterId) return;
+
+      this.sendNetworkBroadcastEvent(EventsService.CombatEvents.MonsterTookDamage, {
+        monsterId,
+        damage: this.props.damage,
+        attackerId: this.toEntityIdString((this.owner as any)?.id) || undefined,
+        player: this.owner,
+      });
+      return;
+    }
 
 
     if (entityName.startsWith("tree")) {

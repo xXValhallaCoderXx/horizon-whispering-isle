@@ -227,9 +227,7 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
 
   private onDamageRequest(data: { monsterId: string; damage: number; attackerId?: string, player: hz.Player }) {
 
-    SoundFxBank.instance.playSoundAt("quest_item_collect", data.player.position.get(), 1.5);
-    VisualFxBank.instance.playVFXAt("smoke_destroy_small", data.player.position.get(), 1.5);
-
+  SoundFxBank.instance.playSoundAt("melee_swipe_sfx", data.player.position.get(), 0);
     const key = this.toIdKey(data.monsterId);
 
     if (!key) return;
@@ -248,7 +246,8 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
 
     controller.currentHealth -= damageAmount;
     controller.currentHealth = Math.max(0, controller.currentHealth); // Clamp health at 0
-
+  
+    //   VisualFxBank.instance.playVFXAt("smoke_destroy_small", data.player.position.get(), 1.5);
     // Broadcast the health update to ALL players
     this.broadcastHealthUpdate(controller);
 
@@ -282,6 +281,8 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
     } else {
       // Broadcast death event BEFORE unloading
       console.error(`[MonsterSpawnManager] Broadcasting death of Monster ID Key: ${idKey}`);
+      VisualFxBank.instance.playVFXAt("smoke_destroy_small", deathPosition, 0);
+      SoundFxBank.instance.playSoundAt("chicken_cluck_sfx", deathPosition, 0);
       const deathPayload = { monsterId: idKey, killerId: killerId, position: deathPosition, monsterType: this.props.monsterType as string };
       this.sendNetworkBroadcastEvent(EventsService.CombatEvents.MonsterDied, deathPayload);
 

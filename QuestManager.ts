@@ -480,7 +480,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
   private playCollectionSoundForPlayer(player: hz.Player, entityId?: string) {
     try {
-      SoundFxBank.instance.playSoundForPlayer("quest_item_collect", player);
+      SoundFxBank.instance.playSoundAt("quest_item_collect", player.position.get());
     } catch { }
   }
 

@@ -17,6 +17,8 @@ export class SoundFxBank extends Component<typeof SoundFxBank> {
     hitDull: { type: PropTypes.Asset },
     questItemCollect: { type: PropTypes.Asset },
     oreCrumbleSfx: { type: PropTypes.Asset },
+    meleeSwipeSfx: { type: PropTypes.Asset },
+    chickenCluckSfx: { type: PropTypes.Asset },
   };
 
   static instance: SoundFxBank;
@@ -31,11 +33,13 @@ export class SoundFxBank extends Component<typeof SoundFxBank> {
     // We link the prop asset to a simple string ID.
 
     // Asset from props, String ID, Pool Size
-    this.spawnPoolHelper(this.props.oreHitSuccess as Asset, "ore_hit_success", 5);
-    this.spawnPoolHelper(this.props.woodHitSuccess as Asset, "wood_hit_success", 5);
-    this.spawnPoolHelper(this.props.questItemCollect as Asset, "quest_item_collect", 5);
-    this.spawnPoolHelper(this.props.hitDull as Asset, "hit_dull", 5);
-    this.spawnPoolHelper(this.props.oreCrumbleSfx as Asset, "ore_crumble_sfx", 5);
+    this.spawnPoolHelper(this.props.oreHitSuccess as Asset, "ore_hit_success", 3);
+    this.spawnPoolHelper(this.props.woodHitSuccess as Asset, "wood_hit_success", 3);
+    this.spawnPoolHelper(this.props.questItemCollect as Asset, "quest_item_collect", 3);
+    this.spawnPoolHelper(this.props.hitDull as Asset, "hit_dull", 3);
+    this.spawnPoolHelper(this.props.oreCrumbleSfx as Asset, "ore_crumble_sfx", 3);
+    this.spawnPoolHelper(this.props.meleeSwipeSfx as Asset, "melee_swipe_sfx", 3);
+    this.spawnPoolHelper(this.props.chickenCluckSfx as Asset, "chicken_cluck_sfx", 3);
   }
 
   /**
@@ -52,7 +56,7 @@ export class SoundFxBank extends Component<typeof SoundFxBank> {
     this.pools.set(soundId, newPool);
 
     // --- These are the defaults your SpawnController constructor needs ---
-    const spawnPos = Vec3.zero; // We'll move them anyway
+    const spawnPos = new Vec3(0, -1000, 0); // We'll move them anyway
     const spawnRot = Quaternion.one;
     const spawnScale = Vec3.one;
 

@@ -60,16 +60,10 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
 
     // References
     trigger: { type: hz.PropTypes.Entity },
-    hitbox: { type: hz.PropTypes.Entity },
-    hitSfx: { type: hz.PropTypes.Entity },
-    deathSfx: { type: hz.PropTypes.Entity },
-    deathVfx: { type: hz.PropTypes.Entity }
+
   };
 
-  // Audio/Visual
-  hitSfx?: hz.AudioGizmo;
-  deathSfx?: hz.AudioGizmo;
-  deathVfx?: hz.ParticleGizmo;
+
 
   // Combat State
   currentHitPoints: number = 100;
@@ -109,11 +103,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
   private isAggressive: boolean = true;
   private isRoaming: boolean = false;
 
-  preStart(): void {
-    this.hitSfx = this.props.hitSfx?.as(hz.AudioGizmo);
-    this.deathSfx = this.props.deathSfx?.as(hz.AudioGizmo);
-    this.deathVfx = this.props.deathVfx?.as(hz.ParticleGizmo);
-  }
+  preStart(): void { }
 
   start() {
     super.start();
@@ -177,25 +167,25 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     }
 
     // Hitbox for weapon collision
-    if (this.props.hitbox) {
-      this.connectCodeBlockEvent(
-        this.props.hitbox as hz.Entity,
-        hz.CodeBlockEvents.OnEntityEnterTrigger,
-        (weapon) => {
-          this.onWeaponCollision(weapon);
-        }
-      );
-    }
+    // if (this.props.hitbox) {
+    //   this.connectCodeBlockEvent(
+    //     this.props.hitbox as hz.Entity,
+    //     hz.CodeBlockEvents.OnEntityEnterTrigger,
+    //     (weapon) => {
+    //       this.onWeaponCollision(weapon);
+    //     }
+    //   );
+    // }
   }
 
   private setupCombatEvents() {
     // Listen for weapon swings
-    this.connectNetworkBroadcastEvent(
-      EventsService.CombatEvents.AttackSwingEvent,
-      (payload) => {
-        this.onWeaponSwing(payload);
-      }
-    );
+    // this.connectNetworkBroadcastEvent(
+    //   EventsService.CombatEvents.AttackSwingEvent,
+    //   (payload) => {
+    //     this.onWeaponSwing(payload);
+    //   }
+    // );
 
     // Listen for health updates from server
     this.connectNetworkBroadcastEvent(
@@ -203,7 +193,14 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
       (payload: { monsterId: string; currentHealth: number; maxHealth: number }) => {
         const myId = this.entity.id.toString();
         if (payload.monsterId === myId) {
+          const was = this.currentHitPoints;
           this.currentHitPoints = payload.currentHealth;
+
+          // Local feedback on confirmed hit (HP decreased but not dead)
+          if (this.currentHitPoints > 0 && this.currentHitPoints < was) {
+            this.triggerHitAnimation();
+          }
+
           console.log(`[EnemyNPC] Health updated: ${this.currentHitPoints}/${payload.maxHealth}`);
         }
       }
@@ -273,6 +270,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
    * Toggle aggressive behavior
    */
   public setAggressive(aggressive: boolean) {
+    this.isAggressive = aggressive;
 
     if (!this.isAggressive && this.targetPlayer) {
       if (this.isRoaming) {
@@ -449,36 +447,36 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
 
   // ============== COMBAT SYSTEM ==============
 
-  private onWeaponSwing(payload: any) {
-    const swingId = `${payload.weapon.id}_${Date.now()}`;
-    this.activeSwings.add(swingId);
+  // private onWeaponSwing(payload: any) {
+  //   const swingId = `${payload.weapon.id}_${Date.now()}`;
+  //   this.activeSwings.add(swingId);
 
-    this.async.setTimeout(() => {
-      this.activeSwings.delete(swingId);
-    }, payload.durationMs);
+  //   this.async.setTimeout(() => {
+  //     this.activeSwings.delete(swingId);
+  //   }, payload.durationMs);
 
-    this.lastSwingData = {
-      weapon: payload.weapon,
-      owner: payload.owner,
-      damage: payload.damage,
-      reach: payload.reach || 2.0,
-      timestamp: Date.now()
-    };
-  }
+  //   this.lastSwingData = {
+  //     weapon: payload.weapon,
+  //     owner: payload.owner,
+  //     damage: payload.damage,
+  //     reach: payload.reach || 2.0,
+  //     timestamp: Date.now()
+  //   };
+  // }
 
-  private onWeaponCollision(weapon: hz.Entity) {
-    if (!this.lastSwingData || this.activeSwings.size === 0 || this.dead) return;
+  // private onWeaponCollision(weapon: hz.Entity) {
+  //   if (!this.lastSwingData || this.activeSwings.size === 0 || this.dead) return;
 
-    const timeSinceSwing = Date.now() - this.lastSwingData.timestamp;
+  //   const timeSinceSwing = Date.now() - this.lastSwingData.timestamp;
 
-    if (weapon.id === this.lastSwingData.weapon.id && timeSinceSwing < 250) {
-      console.log(`[EnemyNPC] Valid hit! Dealing ${this.lastSwingData.damage} damage`);
-      this.takeDamage(this.lastSwingData.damage, this.lastSwingData.owner);
+  //   if (weapon.id === this.lastSwingData.weapon.id && timeSinceSwing < 250) {
+  //     console.log(`[EnemyNPC] Valid hit! Dealing ${this.lastSwingData.damage} damage`);
+  //     this.takeDamage(this.lastSwingData.damage, this.lastSwingData.owner);
 
-      this.lastSwingData = null;
-      this.activeSwings.clear();
-    }
-  }
+  //     this.lastSwingData = null;
+  //     this.activeSwings.clear();
+  //   }
+  // }
 
   private takeDamage(amount: number, attacker: hz.Player) {
     if (this.dead) return;
@@ -486,17 +484,10 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     const now = Date.now() / 1000.0;
     if (now < this.lastHitTime + this.props.hitAnimDuration) return;
 
-    // this.currentHitPoints -= amount;
-
-    this.sendNetworkBroadcastEvent(EventsService.CombatEvents.MonsterTookDamage, {
-      monsterId: this.entity.id.toString(),
-      damage: amount,
-      attackerId: attacker.id.toString(),
-      player: attacker
-    });
+    // Note: server-side managers handle damage networking.
+    // Provide local feedback only.
 
     this.lastHitTime = now;
-    this.hitSfx?.play();
     this.triggerHitAnimation();
     this.applyKnockback(attacker, this.props.knockbackForce);
 
@@ -560,17 +551,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
     this.setState(EnemyNPCState.Dead);
 
 
-    // Use provided position if entity is already destroyed
 
-    if (this.deathSfx) {
-      this.deathSfx.play();
-
-    }
-
-    if (this.deathVfx) {
-      this.deathVfx.play();
-
-    }
   }
 
   // ============== STATE MACHINE ==============
