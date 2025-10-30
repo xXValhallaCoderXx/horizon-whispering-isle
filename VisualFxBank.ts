@@ -14,6 +14,7 @@ export class VisualFxBank extends Component<typeof VisualFxBank> {
     // --- Add ALL your one-shot VFX ASSETS here ---
     smokeDestroyAssetSmall: { type: PropTypes.Asset },
     sparkleStar: { type: PropTypes.Asset },
+    hitDullVFX: { type: PropTypes.Asset },
     // Add more as needed...
   };
 
@@ -32,6 +33,7 @@ export class VisualFxBank extends Component<typeof VisualFxBank> {
     // Asset from props, String ID, Pool Size
     this.spawnPoolHelper(this.props.sparkleStar as Asset, "sparkle_star", 5);
     this.spawnPoolHelper(this.props.smokeDestroyAssetSmall as Asset, "smoke_destroy_small", 5);
+    this.spawnPoolHelper(this.props.hitDullVFX as Asset, "hit_dull", 5);
 
   }
 
@@ -121,6 +123,18 @@ export class VisualFxBank extends Component<typeof VisualFxBank> {
       const playPos = new Vec3(position.x, position.y + heightOffset, position.z);
       gizmo.position.set(playPos);
       gizmo.play();
+    }
+  }
+
+  public playVFXForPlayerAt(vfxId: string, player: Player, position: Vec3, heightOffset: number = 0) {
+    const gizmo = this.getNextGizmo(vfxId);
+    console.log("[VisualFxBank] Attempting Playing VFX for player at pos:", vfxId, player.name.get(), position);
+    if (gizmo) {
+      const playPos = new Vec3(position.x, position.y + heightOffset, position.z);
+      // Reset to ensure re-trigger
+      try { gizmo.stop(); } catch { }
+      gizmo.position.set(playPos);
+      gizmo.play({ players: [player] });
     }
   }
 

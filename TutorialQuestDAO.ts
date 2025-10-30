@@ -351,6 +351,28 @@ export class TutorialQuestDAO {
     return TUTORIAL_QUEST_STAGE_CONFIG[stage].objectives || [];
   }
 
+  public getObjectiveDisplaysForCurrentStage(questId: string): Array<{ description: string; currentCount: number; totalNeeded: number }> {
+    const log = this.getQuestLog(questId);
+    const stageConfig = this.getStageByStepIndex(log.currentStepIndex);
+    if (!stageConfig || !stageConfig.objectives?.length) return [];
+
+    return stageConfig.objectives.map(obj => {
+      const progress = log.objectives?.[obj.objectiveId];
+      return {
+        description: obj.description,
+        currentCount: progress?.currentCount ?? 0,
+        totalNeeded: obj.targetCount,
+      };
+    });
+  }
+
+  // NEW: convenience formatter
+  public getObjectiveDisplayTextForCurrentStage(questId: string, separator: string = "\n"): string {
+    return this.getObjectiveDisplaysForCurrentStage(questId)
+      .map(o => `${o.description}: ${o.currentCount}/${o.totalNeeded}`)
+      .join(separator);
+  }
+
   public getQuestLog(questId: string): QuestLog {
     const state = this.getState();
 

@@ -14,7 +14,9 @@ export class SoundFxBank extends Component<typeof SoundFxBank> {
     // --- Add ALL your one-shot sound ASSETS here ---
     oreHitSuccess: { type: PropTypes.Asset },
     woodHitSuccess: { type: PropTypes.Asset },
+    hitDull: { type: PropTypes.Asset },
     questItemCollect: { type: PropTypes.Asset },
+    oreCrumbleSfx: { type: PropTypes.Asset },
   };
 
   static instance: SoundFxBank;
@@ -32,6 +34,8 @@ export class SoundFxBank extends Component<typeof SoundFxBank> {
     this.spawnPoolHelper(this.props.oreHitSuccess as Asset, "ore_hit_success", 5);
     this.spawnPoolHelper(this.props.woodHitSuccess as Asset, "wood_hit_success", 5);
     this.spawnPoolHelper(this.props.questItemCollect as Asset, "quest_item_collect", 5);
+    this.spawnPoolHelper(this.props.hitDull as Asset, "hit_dull", 5);
+    this.spawnPoolHelper(this.props.oreCrumbleSfx as Asset, "ore_crumble_sfx", 5);
   }
 
   /**

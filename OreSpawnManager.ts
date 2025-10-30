@@ -1,5 +1,8 @@
 import * as hz from 'horizon/core';
 import { EventsService, ORE_TYPES, ORE_RARITY, HarvestableOreConfig } from 'constants';
+import { SoundFxBank } from 'SoundFxBank';
+import { IRequestOreHitPayload } from 'constants';
+import { VisualFxBank } from 'VisualFxBank';
 
 // Internal wrapper class to track spawned ore state
 class OreSpawnController {
@@ -112,6 +115,13 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
   private activeOres: OreSpawnController[] = [];
   private timer: number = 0;
 
+  private readonly MAX_ACTIVE_PER_RARITY: Partial<Record<ORE_RARITY, number>> = {
+    [ORE_RARITY.COMMON]: 10,
+    [ORE_RARITY.RARE]: 5,
+    [ORE_RARITY.LEGENDARY]: 1,
+  };
+
+
   // Mapping from ore entity id (string) -> controller
   private entityToController: Map<string, OreSpawnController> = new Map();
 
@@ -163,6 +173,11 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
     tick();
   }
 
+  private countActiveByRarity(rarity: ORE_RARITY): number {
+    return this.activeOres.filter(o => o.isSpawned && o.oreRarity === rarity).length;
+  }
+
+
   private attemptSpawn(activeList: OreSpawnController[]) {
     this.cleanupInactiveControllers(activeList);
 
@@ -178,6 +193,10 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
     activeList: OreSpawnController[]
   ) {
     if (spawnPoints.length === 0) return;
+
+    const cap = this.MAX_ACTIVE_PER_RARITY[rarity];
+    if (typeof cap === 'number' && this.countActiveByRarity(rarity) >= cap) return;
+
 
     // Find available location for this rarity
     const location = this.getAvailableSpawnLocation(spawnPoints);
@@ -261,29 +280,31 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
   }
 
   // ---- Ore Hit Handler (Server-Side) ----
-  private onOreHitRequest(data: any) {
-    const { player, oreEntity, oreRarity, toolType, hitPosition } = data;
+  private onOreHitRequest(data: IRequestOreHitPayload) {
+    console.error("WAAAWAAAA")
+    const { toolType, hitPosition, player, oreEntity } = data;
 
     const oreId = (oreEntity as any)?.id;
     const key = this.toIdKey(oreId);
-
+    console.error("[OreSpawnManager] onOreHitRequest for ore ID:", key);
     if (!key) return;
 
     const controller = this.entityToController.get(key);
+    console.log("[OreSpawnManager] Retrieved controller for ore ID:", key, controller);
     if (!controller || !controller.isSpawned || !controller.config) {
       return; // Ore not found or already despawned
     }
 
+    console.error("[OreSpawnManager] Found controller for ore ID:", key);
+    console.log("[OreSpawnManager] Ore config:", controller.config);
+    console.log("[OreSpawnManager] Tool type:", toolType);
     // Validate tool compatibility
     if (toolType !== controller.config.toolType) {
       console.error(
         `[OreSpawnManager] Wrong tool: ${toolType} (need ${controller.config.toolType})`
       );
-      // Send wrong tool feedback
-      // this.sendNetworkBroadcastEvent(EventsService.H.OreHitWrongTool, {
-      //   player,
-      //   oreEntity,
-      // });
+      VisualFxBank.instance.playVFXAt("hit_dull", hitPosition, 0);
+      SoundFxBank.instance.playSoundAt("hit_dull", hitPosition, 0);
       return;
     }
 
@@ -297,7 +318,8 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
     // Apply damage
     controller.currentHealth -= damage;
     if (controller.currentHealth < 0) controller.currentHealth = 0;
-
+    SoundFxBank.instance.playSoundAt("ore_hit_success", hitPosition, 0);
+    VisualFxBank.instance.playVFXAt("sparkle_star", hitPosition, 0);
     console.log(
       `[OreSpawnManager] Ore hit! Damage: ${damage}, Health: ${controller.currentHealth}/${controller.maxHealth}`
     );
@@ -351,7 +373,7 @@ class OreSpawnManager extends hz.Component<typeof OreSpawnManager> {
       this.locationCooldowns.set(locKey, Date.now() + delay);
     }
     console.log(`[OreSpawnManager] Ore depleted! Rarity: ${controller.oreRarity}`);
-
+    VisualFxBank.instance.playVFXAt("smoke_destroy_small", position, 0);
     // Broadcast depletion event
     this.sendNetworkBroadcastEvent(EventsService.HarvestEvents.OreDepleted, {
       player,

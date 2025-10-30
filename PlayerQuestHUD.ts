@@ -83,7 +83,9 @@ class PlayerQuestHUD extends UIComponent {
       const localPlayer = this.world.getLocalPlayer();
       if (localPlayer && this.entity.owner.get() === localPlayer) {
         const { title, visible, objective } = payload;
-        this.updateUIBindings(title, objective, visible);
+        const formattedObjective = this.formatObjectiveText(objective);
+
+        this.updateUIBindings(title, formattedObjective, visible);
       }
 
     });
@@ -128,11 +130,39 @@ class PlayerQuestHUD extends UIComponent {
     // When quest visibility changes, update final visibility
     this.updateFinalVisibility();
   }
+
+  private formatObjectiveText(obj: unknown): string {
+    if (obj == null) return "";
+
+    if (typeof obj === "string") {
+      return obj; // keep backward compatible payloads
+    }
+
+    const formatOne = (o: any) => {
+      const description: string = o?.description ?? "";
+      const current: number = o?.currentCount ?? 0;
+      const total: number = (o?.totalNeeded ?? o?.targetCount) ?? 0;
+
+      if (!description) return "";
+      return `${description}: ${current}/${total}`;
+    };
+
+    if (Array.isArray(obj)) {
+      return obj.map(formatOne).filter(Boolean).join("\n");
+    }
+
+    if (typeof obj === "object") {
+      const line = formatOne(obj as any);
+      return line || "";
+    }
+
+    return "";
+  }
 }
 UIComponent.register(PlayerQuestHUD);
 
-const HUD_WIDTH = 180;
-const HUD_HEIGHT = 240;
+const HUD_WIDTH = 205;
+const HUD_HEIGHT = 180;
 
 const RootStyle: ViewStyle = {
   position: "absolute",

@@ -92,7 +92,8 @@ export class EventsService {
 export type IRequestOreHitPayload = {
     player: Player;
     oreEntity: Entity;
-    oreRarity: string;
+    playerId: string;
+    oreEntityId: string;
     toolType: string;
     hitPosition: Vec3;
 };
@@ -188,8 +189,8 @@ export type WeaponStats = {
 
 // NEW 
 export type IAttackSwingPayload = {
-    weapon: Entity;
-    owner: Player;
+    // weapon: Entity;
+    // owner: Player;
     damage: number;
     reach?: number;
     durationMs?: number;
@@ -424,20 +425,12 @@ export const MONSTERS: { [key: string]: MonsterConfigData } = {
 };
 
 
-export enum TREES {
-    OAK = 'oak',
-    PINE = 'pine',
-}
 
-export enum TREE_RARITY {
-    COMMON = 'COMMON',
-    RARE = 'RARE',
-    LEGENDARY = 'LEGENDARY',
-}
+
 
 
 export interface HarvestableTreeConfig {
-    treeType: TREES;
+    rarity: TREE_RARITY;
     toolType: string; // e.g., "axe", "hatchet"
     maxHealth: number;
     dropChance: number; // 0.0 to 1.0
@@ -480,27 +473,43 @@ export interface HarvestableOreConfig {
     skillRequired?: number; // Placeholder for player skill level
 }
 
+export enum TREE_RARITY {
+    COMMON = 'COMMON',
+    RARE = 'RARE',
+    LEGENDARY = 'LEGENDARY',
+}
+
 export const TREE_TYPES: { [key: string]: HarvestableTreeConfig } = {
-    [TREES.OAK]: {
-        treeType: TREES.OAK,
+    [TREE_RARITY.COMMON]: {
+        rarity: TREE_RARITY.COMMON,
         toolType: 'axe',
-        maxHealth: 5, // 5 hits to chop down
-        dropChance: 0.8, // 80% chance to drop logs
+        maxHealth: 5,
+        dropChance: 0.8,
         minDrops: 1,
         maxDrops: 3,
-        regenTimeMs: 30000, // 30 seconds to respawn
-        logItemId: ITEM_TYPES.RAW_WOOD_LOG
+        regenTimeMs: 30000,
+        logItemId: ITEM_TYPES.RAW_WOOD_LOG,
     },
-    [TREES.PINE]: {
-        treeType: TREES.PINE,
+    [TREE_RARITY.RARE]: {
+        rarity: TREE_RARITY.RARE,
         toolType: 'axe',
-        maxHealth: 3, // Easier tree
-        dropChance: 0.6,
+        maxHealth: 7,
+        dropChance: 0.7,
         minDrops: 1,
-        maxDrops: 2,
-        regenTimeMs: 20000,
-        logItemId: ITEM_TYPES.RAW_WOOD_LOG
-    }
+        maxDrops: 3,
+        regenTimeMs: 45000,
+        logItemId: ITEM_TYPES.RAW_WOOD_LOG,
+    },
+    [TREE_RARITY.LEGENDARY]: {
+        rarity: TREE_RARITY.LEGENDARY,
+        toolType: 'axe',
+        maxHealth: 10,
+        dropChance: 0.9,
+        minDrops: 2,
+        maxDrops: 4,
+        regenTimeMs: 60000,
+        logItemId: ITEM_TYPES.RAW_WOOD_LOG,
+    },
 };
 
 

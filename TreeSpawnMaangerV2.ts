@@ -1,5 +1,7 @@
 import * as hz from 'horizon/core';
 import { EventsService, TREE_TYPES, TREE_RARITY, HarvestableTreeConfig } from 'constants';
+import { SoundFxBank } from 'SoundFxBank';
+import { VisualFxBank } from 'VisualFxBank';
 
 // Internal wrapper class to track spawned tree state
 class TreeSpawnController {
@@ -102,6 +104,12 @@ class TreeSpawnMaangerV2 extends hz.Component<typeof TreeSpawnMaangerV2> {
   // Tweakable pacing
   private readonly RESPAWN_DELAY_MULTIPLIER = 1.5;
 
+  private readonly MAX_ACTIVE_PER_RARITY: Partial<Record<TREE_RARITY, number>> = {
+    [TREE_RARITY.COMMON]: 8,
+    [TREE_RARITY.RARE]: 4,
+    [TREE_RARITY.LEGENDARY]: 1,
+  };
+
   // Cooldown per spawn point (entity id -> timestamp ms)
   private locationCooldowns: Map<string, number> = new Map();
 
@@ -171,12 +179,19 @@ class TreeSpawnMaangerV2 extends hz.Component<typeof TreeSpawnMaangerV2> {
     this.attemptSpawnRarity(TREE_RARITY.LEGENDARY, this.legendarySpawnPoints, activeList);
   }
 
+  private countActiveByRarity(rarity: TREE_RARITY): number {
+    return this.activeTrees.filter(t => t.isSpawned && t.treeRarity === rarity).length;
+  }
+
   private attemptSpawnRarity(
     rarity: TREE_RARITY,
     spawnPoints: hz.Entity[],
     activeList: TreeSpawnController[]
   ) {
     if (spawnPoints.length === 0) return;
+
+    const cap = this.MAX_ACTIVE_PER_RARITY[rarity];
+    if (typeof cap === 'number' && this.countActiveByRarity(rarity) >= cap) return;
 
     const location = this.getAvailableSpawnLocation(spawnPoints);
     if (!location) return;
@@ -226,17 +241,11 @@ class TreeSpawnMaangerV2 extends hz.Component<typeof TreeSpawnMaangerV2> {
     wrapper.spawnLocation = location;
 
     // Randomize health within range
-    const cfg = config as any;
-    const minH = Number.isFinite(cfg?.minHealth) ? Number(cfg.minHealth) : Number(cfg?.maxHealth ?? 100);
-    const maxH = Number.isFinite(cfg?.maxHealth) ? Number(cfg.maxHealth) : minH;
+    const minH = Number.isFinite((config as any)?.minHealth) ? Number((config as any).minHealth) : Number(config.maxHealth);
+    const maxH = Number.isFinite(config.maxHealth) ? Number(config.maxHealth) : minH;
     const health = Math.floor(Math.random() * (Math.max(maxH - minH, 0) + 1) + minH);
 
-
-    const initData = {
-      health,
-      treeRarity: rarity,
-      config,
-    };
+    const initData = { health, treeRarity: rarity, config };
 
     wrapper.spawn(position, initData).then(() => {
       if (!wrapper.isSpawned || !wrapper.treeIdKey) {
@@ -272,6 +281,8 @@ class TreeSpawnMaangerV2 extends hz.Component<typeof TreeSpawnMaangerV2> {
     // Validate tool (optional)
     if (cfg?.toolType && toolType && toolType !== cfg.toolType) {
       console.error(`[TreeSpawnMaangerV2] Wrong tool: ${toolType} (need ${cfg.toolType})`);
+      SoundFxBank.instance.playSoundAt('hit_dull', hitPosition, 0);
+      VisualFxBank.instance.playVFXAt('hit_dull', hitPosition, 0);
       return;
     }
     // Damage roll
@@ -283,6 +294,8 @@ class TreeSpawnMaangerV2 extends hz.Component<typeof TreeSpawnMaangerV2> {
     controller.currentHealth -= damage;
     if (controller.currentHealth < 0) controller.currentHealth = 0;
 
+    SoundFxBank.instance.playSoundAt('wood_hit_success', hitPosition, 0);
+    VisualFxBank.instance.playVFXAt('sparkle_star', hitPosition, 0);
     // Broadcast hit confirmation
     this.sendNetworkBroadcastEvent(EventsService.HarvestEvents.TreeHit, {
       player,
@@ -310,7 +323,7 @@ class TreeSpawnMaangerV2 extends hz.Component<typeof TreeSpawnMaangerV2> {
     }
 
     console.log(`[TreeSpawnMaangerV2] Tree depleted! Rarity: ${controller.treeRarity}`);
-
+    VisualFxBank.instance.playVFXAt('smoke_destroy_small', position, 0);
     // Broadcast depletion event
     this.sendNetworkBroadcastEvent(EventsService.HarvestEvents.TreeDepleted, {
       player,

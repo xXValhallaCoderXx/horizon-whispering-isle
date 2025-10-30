@@ -81,7 +81,7 @@ const DIALOG_STEP_2_COLLECT_COCONUTS: Record<string, LocalNode> = {
 const DIALOG_STEP_3_RETURN_COCONUTS: Record<string, LocalNode> = {
   root: {
     id: 'root',
-    response: "You're back! And you have the coconuts! Great. Here's the Axe I promised. Now, use it to hunt 1 chicken.",
+    response: "You're back! with the coconuts! Great. Now the part I dont like, take this axe, and go hunt some chicken we need food.",
     options: [{ text: 'Thanks!', close: true }],
     questId: TUTORIAL_QUEST_KEY // This node will advance the quest
   },

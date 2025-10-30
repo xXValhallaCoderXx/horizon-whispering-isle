@@ -15,7 +15,6 @@ import {
 } from "horizon/core";
 import { EventsService } from "constants";
 import { StartAttackingPlayer, StopAttackingPlayer } from "EnemyNPC";
-import { VisualFxBank } from "VisualFxBank";
 export const DamageEvent = new LocalEvent<{ amount: number }>();
 
 
@@ -26,22 +25,12 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     reach: { type: PropTypes.Number, default: 2.0 },
     weight: { type: PropTypes.Number, default: 5 },
     type: { type: PropTypes.String, default: "" }, // "axe", "sword", "pickaxe"
-    hitSparkEffect: { type: PropTypes.Entity },
-    hitRingEffect: { type: PropTypes.Entity },
-    hitResourceDullEffect: { type: PropTypes.Entity },
-    hitResourceOreSuccessEffect: { type: PropTypes.Entity },
-    hitResourceWoodSuccessEffect: { type: PropTypes.Entity },
     baseCooldownMs: { type: PropTypes.Number, default: 500 }, // Base cooldown in milliseconds
     weightMultiplier: { type: PropTypes.Number, default: 50 },
     hitCooldownMs: { type: PropTypes.Number, default: 100 }, // Minimum time between hits
   };
   private owner: Player | null = null;
 
-  private hitSparkVfx?: ParticleGizmo | null = null;
-  private hitRingVfx?: ParticleGizmo | null = null;
-  private hitResourceDullSfx?: AudioGizmo | null = null;
-  private hitResourceOreSuccessSfx?: AudioGizmo | null = null;
-  private hitResourceWoodSuccessSfx?: AudioGizmo | null = null;
   private lastSwingTime: number = 0; // Track when the last swing occurred
   private isSwinging: boolean = false; // Track if currently swinging
 
@@ -51,11 +40,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
 
 
   preStart(): void {
-    this.hitRingVfx = this.props.hitRingEffect?.as(ParticleGizmo);
-    this.hitSparkVfx = this.props.hitSparkEffect?.as(ParticleGizmo);
-    this.hitResourceDullSfx = this.props.hitResourceDullEffect?.as(AudioGizmo);
-    this.hitResourceOreSuccessSfx = this.props.hitResourceOreSuccessEffect?.as(AudioGizmo);
-    this.hitResourceWoodSuccessSfx = this.props.hitResourceWoodSuccessEffect?.as(AudioGizmo);
+
 
     this.connectCodeBlockEvent(
       this.entity,
@@ -127,6 +112,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
   }
 
   private handleEntityCollision(collideWith: Entity, collideAt: Vec3) {
+    console.log(`[BaseWeapon] Hit ${collideWith.name.get()}`);
     // Only process hits during active swings
     if (!this.isSwinging) return;
 
@@ -135,42 +121,61 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
       return;
     }
 
+    console.log(`[BaseWeapon] Processing hit on ${collideWith.name.get()}`);
     // Prevent rapid successive hits (debounce)
     const now = Date.now();
     if (now - this.lastHitTime < this.props.hitCooldownMs) {
       return;
     }
+    console.log(`[BaseWeapon] Hit cooldown passed for ${collideWith.name.get()}`);
 
     // Mark this entity as hit for this swing
     this.hitEntitiesThisSwing.add(collideWith);
     this.lastHitTime = now;
 
-    const entityName = collideWith.name.get();
-    const baseName = entityName.split("_")[0].toLowerCase();
-    const toolType = this.props.type.toLowerCase();
+    console.log(`[BaseWeapon] Sending RequestOreHit for ${collideWith.name.get()}`);
 
-    console.log(`[BaseWeapon] Hit ${entityName} (base: ${baseName}) with ${toolType}`);
-    // TODO - Hacky as shit but no time
-    if (baseName === "ore" && toolType !== "pickaxe") {
-      this.hitResourceDullSfx?.play();
-      this.hitRingVfx?.play();
-    } else if (baseName === "tree" && toolType !== "axe") {
-      this.hitResourceDullSfx?.play();
-      this.hitRingVfx?.play();
-    } else {
-      if (baseName === "ore") {
-        this.hitResourceOreSuccessSfx?.play(); 
-      } else if (baseName === "tree") {
-        this.hitResourceWoodSuccessSfx?.play();
-      }
-      this.hitSparkVfx?.play();
+    const entityName = collideWith.name.get().toLowerCase();
+
+
+    if (entityName.startsWith("tree")) {
+      console.log(`[BaseWeapon] Valid tree hit detected: ${entityName}`);
+      this.sendNetworkBroadcastEvent(EventsService.HarvestEvents.RequestTreeHit, {
+        player: this.owner as Player,
+        treeEntity: collideWith as Entity,
+        toolType: this.props.type,
+        hitPosition: collideAt,
+      });
+      return;
     }
+
+    // Handle ores
+    if (entityName.startsWith("ore")) {
+      console.log(`[BaseWeapon] Valid ore hit detected: ${entityName}`);
+      this.sendNetworkBroadcastEvent(EventsService.HarvestEvents.RequestOreHit, {
+        player: this.owner as Player,
+        oreEntity: collideWith as Entity,
+        playerId: this.toEntityIdString((this.owner as any)?.id),
+        oreEntityId: this.toEntityIdString((collideWith as any)?.id),
+        toolType: this.props.type,
+        hitPosition: collideAt,
+      });
+      return;
+    }
+
   }
 
-
+  private toEntityIdString(id: any): string {
+    const t = typeof id;
+    if (t === "string") return id;
+    if (t === "number") return String(id);
+    if (t === "bigint") return id.toString();
+    return "";
+  }
 
   // ** ADD THIS: Pass input to components **
   private onFirePressed(player: Player) {
+    if (!this.isLocalOwner()) return;
     if (!this.isHeld()) return;
 
     if (!this.canSwing()) {
@@ -191,23 +196,11 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
 
     const swingDuration = Math.max(150, 250 + (this.props.weight * 10)); // Minimum 150ms, increases with weight
 
-    this.sendNetworkBroadcastEvent(EventsService.CombatEvents.AttackSwingEvent, {
-      owner: player,
-      weapon: this.entity,
-      damage: this.props.damage,
-      reach: this.props.reach,
-      durationMs: 250, // Was 250 TODO  - Check if we can pass this in from the props
-      type: this.props.type,
-
-    });
-
     // End swing after duration
     this.async.setTimeout(() => {
       this.isSwinging = false;
       this.hitEntitiesThisSwing.clear(); // Clean up at end of swing
     }, swingDuration);
-
-
   }
 
   // ** ADD THIS: Pass input to components **
@@ -272,6 +265,13 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
 
   public isHeld(): boolean {
     return this.owner !== null;
+  }
+
+  private isLocalOwner(): boolean {
+    const me = this.world.getLocalPlayer?.();
+    if (!me) return false; // server
+    const owner = this.entity.owner.get();
+    return !!owner && owner === me;
   }
 }
 Component.register(BaseWeapon);

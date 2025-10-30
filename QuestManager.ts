@@ -71,7 +71,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
           title: "Tutorial",
           questId: activeQuestId,
           visible: true,
-          objective: objectiveText
+          objective: tutorialDao?.getObjectiveDisplayTextForCurrentStage(TUTORIAL_QUEST_KEY) || ""
         });
       }, 1500);
     }
@@ -108,7 +108,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       title: "Tutorial",
       questId: questId,
       visible: true,
-      objective: objectiveText
+      objective: questDAO?.getObjectiveDisplayTextForCurrentStage(TUTORIAL_QUEST_KEY) || ""
     });
   }
 
@@ -144,13 +144,12 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       console.log(`[QuestManager] Storage bag marked as acquired for ${player.name.get()}`);
     }
 
-    const objectiveText = this.getQuestObjectiveText(player, questId);
     this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, {
       player,
       title: "Tutorial",
       questId: questId,
       visible: true,
-      objective: objectiveText
+      objective: questDAO?.getObjectiveDisplayTextForCurrentStage(TUTORIAL_QUEST_KEY) || ""
     });
     console.log(`[QuestManager] Quest started successfully for ${player.name.get()}`);
   }
@@ -301,7 +300,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
 
       // Update HUD with simple format
-      const objectiveText = this.getQuestObjectiveText(player, activeQuestId);
+      const objectiveText = questDAO?.getObjectiveDisplayTextForCurrentStage(activeQuestId) || "";
       this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, {
         player,
         title: "Tutorial",
@@ -398,13 +397,12 @@ class QuestManager extends hz.Component<typeof QuestManager> {
       this.showQuestMessage(player, newStageConfig);
 
       // Update HUD with new objective
-      const objectiveText = this.getQuestObjectiveText(player, questId);
       this.sendNetworkEvent(player, EventsService.QuestEvents.DisplayQuestHUD, {
         player,
         title: "Tutorial",
         questId: questId,
         visible: true,
-        objective: objectiveText
+        objective: questDAO?.getObjectiveDisplayTextForCurrentStage(TUTORIAL_QUEST_KEY) || ""
       });
     }
   }
@@ -488,7 +486,7 @@ class QuestManager extends hz.Component<typeof QuestManager> {
 
   private playCollectionVfxForPlayer(player: hz.Player, entityId?: string) {
     try {
-      VisualFxBank.instance.playVFXForPlayer("sparkle_star", player);
+      VisualFxBank.instance.playVFXForPlayerAt("sparkle_star", player, player.position.get());
     } catch {}
   }
 
