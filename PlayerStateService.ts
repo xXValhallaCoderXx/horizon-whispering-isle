@@ -20,6 +20,10 @@ export class PlayerStateService extends hz.Component<typeof PlayerStateService> 
       this.playerDaos.set(player, new PlayerStateDAO(player, this.world));
       this.inventoryDaos.set(player, new InventoryDAO(player, this.world));
       this.sendLocalBroadcastEvent(EventsService.PlayerEvents.OnPlayerStateLoaded, { player });
+
+      const inventoryItems = this.inventoryDaos.get(player)?.getAllItems();
+      this.sendNetworkEvent(player, EventsService.PlayerEvents.RefreshInventoryHUD, { player, inventory: inventoryItems });
+      this.sendNetworkEvent(player, EventsService.UIEvents.RefreshPlayerStatsUI, { player, stats: this.playerDaos.get(player)?.getState() });
     });
 
     this.connectCodeBlockEvent(this.entity, hz.CodeBlockEvents.OnPlayerExitWorld, (player) => {

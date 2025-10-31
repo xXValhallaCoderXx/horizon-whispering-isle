@@ -39,7 +39,7 @@ class WorldManager extends Component<typeof WorldManager> {
       players: [player],
       audibilityMode: AudibilityMode.AudibleTo,
     };
-    VisualFxBank.instance.playVFXForPlayer("smoke_destroy_small", player);
+    VisualFxBank.instance.playVFXForPlayerAt("smoke_destroy_small", player, player.position.get());
     welcomeSound && welcomeSound.play(options);
   }
 
@@ -51,7 +51,8 @@ class WorldManager extends Component<typeof WorldManager> {
     if (isStorageInitialized && this.props.playerStorageAsset) {
       this.attachAsset(player, this.props.playerStorageAsset);
     }
-    if (isTutorialComplete) {
+    if (isTutorialComplete && this.props.starterAxeAsset) {
+      this.attachAsset(player, this.props.starterAxeAsset);
       this.teleportPlayer(player, this.props.mainIslandSpawnPoint);
     } else {
       const questId = tutorialDao?.getActiveQuestId();
@@ -60,10 +61,6 @@ class WorldManager extends Component<typeof WorldManager> {
         this.attachAsset(player, this.props.starterAxeAsset);
       }
       this.teleportPlayer(player, this.props.tutorialIslandSpawnPoint);
-      // if (this.props.tutorialNpcEntity) {
-      //   this.sendNetworkEvent(player, EventsService.CameraEvents.PanToEntity, { player, entity: this.props.tutorialNpcEntity, duration: 1500 });
-      // }
-
     }
   }
 

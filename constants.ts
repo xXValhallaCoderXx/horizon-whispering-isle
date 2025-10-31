@@ -1,6 +1,7 @@
 import { BaseWeapon } from 'BaseWeapon';
 
 import { Entity, Player, Vec3, LocalEvent, NetworkEvent, Asset, InfoSlide } from 'horizon/core';
+import { PlayerStateDaoState } from 'PlayerStateDAO';
 
 
 export const INVENTORY_STATE_KEY = `player:inventory_state`;
@@ -58,6 +59,8 @@ export class EventsService {
 
     static readonly UIEvents = {
         TogglePlayerUI: new NetworkEvent<{ player: Player, visible: boolean }>("TogglePlayerUI"),
+        RefreshPlayerStatsUI: new NetworkEvent<IRefreshPlayerStatsUIPayload>("RefreshPlayerStatsUI"),
+
     }
 
 
@@ -87,6 +90,12 @@ export class EventsService {
     static logEvent(eventName: string, payload: any) {
         console.log(`[EventsService] ${eventName}:`, JSON.stringify(payload, null, 2));
     }
+}
+
+
+export type IRefreshPlayerStatsUIPayload = {
+    player: Player;
+    stats: any;
 }
 
 export type IRequestOreHitPayload = {
@@ -400,6 +409,30 @@ export const MONSTERS: { [key: string]: MonsterConfigData } = {
     CHICKEN: {
         type: "CHICKEN",
         label: "Chicken",
+        spawnRate: 3000,
+        spawnChance: 0.8,
+        maxActive: 5,
+        rareChance: 0.1,
+        commonStats: { health: 25, scale: Vec3.one },
+        rareStats: { health: 50, scale: new Vec3(1.5, 1.5, 1.5) },
+        lootTable: {
+            dropMode: 'multiple',  // Roll each item independently
+            entries: [
+                // { itemId: ITEM_TYPES.FEATHER, dropChance: 0.4, minQuantity: 1, maxQuantity: 2 },
+                { itemId: ITEM_TYPES.CHICKEN_MEAT, dropChance: 0.6, minQuantity: 1, maxQuantity: 1 },
+                // { itemId: ITEM_TYPES.COIN, dropChance: 0.1, minQuantity: 1, maxQuantity: 1 },
+                // { itemId: ITEM_TYPES.GEM_SMALL, dropChance: 0.05, minQuantity: 1, maxQuantity: 1 }
+            ],
+            guaranteedDrops: [],      // None for now
+            scatterRadius: 1.5,
+            pluckHeight: 0.5,
+            autoDespawnSeconds: 60,
+            spawnCountCap: 12
+        }
+    },
+    ZOMBIE: {
+        type: "ZOMBIE",
+        label: "Zombie",
         spawnRate: 3000,
         spawnChance: 0.8,
         maxActive: 5,

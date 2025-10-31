@@ -1,5 +1,5 @@
 import { EventsService } from 'constants'
-import { PropTypes, Color, Player, PlayerInput, SerializableState, PlayerControls, PlayerInputAction, ButtonIcon, ButtonPlacement, PlayerDeviceType } from 'horizon/core'
+import { PropTypes, Color, Player, PlayerInput, SerializableState, PlayerControls, PlayerInputAction, ButtonIcon, ButtonPlacement } from 'horizon/core'
 import {
   UIComponent,
   View,
@@ -28,6 +28,11 @@ export class PlayerInventoryHud extends UIComponent<typeof PlayerInventoryHud> {
     { label: 'Strength', value: new Binding('10') },
     // add more rows as needed
   ]
+
+  private slotTexts = Array.from({ length: SLOT_ROWS * SLOT_COLS }, () => ({
+    label: new Binding<string>(''),
+    count: new Binding<string>(''),
+  }));
 
   receiveOwnership(_serializableState: SerializableState, _oldOwner: Player, _newOwner: Player): void {
     if (_newOwner !== this.world.getServerPlayer()) {
@@ -95,6 +100,7 @@ export class PlayerInventoryHud extends UIComponent<typeof PlayerInventoryHud> {
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
         slots.push(
           View({
             style: {
@@ -106,6 +112,10 @@ export class PlayerInventoryHud extends UIComponent<typeof PlayerInventoryHud> {
               borderWidth: SLOT_BORDER_WIDTH,
               borderColor: SLOT_BORDER_COLOR,
             },
+            children: [
+              Text({ text: this.slotTexts[idx].label, style: SlotItemCodeText }),
+              Text({ text: this.slotTexts[idx].count, style: SlotItemCountText }),
+            ],
           })
         )
       }
@@ -117,14 +127,32 @@ export class PlayerInventoryHud extends UIComponent<typeof PlayerInventoryHud> {
     this.connectNetworkEvent(
       this.entity.owner.get(),
       EventsService.PlayerEvents.RefreshInventoryHUD,
-      (data: { player: Player; title: string; visible: boolean }) => {
+      (data: { player: Player; inventory?: Record<string, number>; title?: string; visible?: boolean }) => {
         const localPlayer = this.world.getLocalPlayer();
         if (localPlayer && this.entity.owner.get() === localPlayer) {
-          console.log("[PlayerInventoryHud] Refreshing Inventory HUD:", data);
+          if (data.inventory) this.updateInventoryGrid(data.inventory);
+          if (data.title) this.setTitle(data.title);
+          if (typeof data.visible === 'boolean') this.setVisible(data.visible);
         }
       }
     );
 
+  }
+
+  private updateInventoryGrid(inv: Record<string, number>) {
+    const entries = Object.entries(inv);
+    const max = this.slotTexts.length;
+
+    for (let i = 0; i < max; i++) {
+      if (i < entries.length) {
+        const [name, count] = entries[i];
+        this.slotTexts[i].label.set(this.abbr(name));
+        this.slotTexts[i].count.set(`x${count}`);
+      } else {
+        this.slotTexts[i].label.set('');
+        this.slotTexts[i].count.set('');
+      }
+    }
   }
 
   /**
@@ -133,6 +161,7 @@ export class PlayerInventoryHud extends UIComponent<typeof PlayerInventoryHud> {
    */
   private setVisible(visible: boolean) {
     this.isVisibleBinding.set(visible);
+    this.entity.visible.set(visible);
   }
 
 
@@ -153,9 +182,14 @@ export class PlayerInventoryHud extends UIComponent<typeof PlayerInventoryHud> {
   public setTitle(title: string) {
     this.inventoryTitleBinding.set(title);
   }
+
+  private abbr(name: string): string {
+    return name.slice(0, 3).toUpperCase();
+  }
 }
 
 UIComponent.register(PlayerInventoryHud);
+
 
 // --- STYLES ---
 const STAT_ROW_HEIGHT = 28;
@@ -253,3 +287,19 @@ const ContentContainerStyle: ViewStyle = {
   paddingBottom: 20,
 }
 
+const SlotItemCodeText: TextStyle = {
+  position: 'absolute',
+  left: 4,
+  top: 4,
+  color: Color.black,
+  fontSize: 12,
+  fontWeight: 'bold',
+}
+
+const SlotItemCountText: TextStyle = {
+  position: 'absolute',
+  right: 4,
+  bottom: 4,
+  color: Color.black,
+  fontSize: 12,
+}

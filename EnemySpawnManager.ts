@@ -274,7 +274,17 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
 
   private handleMonsterDeath(controller: MonsterSpawnController, killerId?: string) {
     const idKey = controller.monsterIdKey;
-    const deathPosition = controller.spawnPosition || new hz.Vec3(0, 0, 0); // Get position before cleanup
+    // Prefer the monster's current position over the spawn position
+    let deathPosition: hz.Vec3;
+    const root = controller.getRootEntity();
+    if (root) {
+      deathPosition = root.position.get(); // current world position
+    } else if (controller.spawnPosition) {
+      deathPosition = controller.spawnPosition;
+    } else {
+      deathPosition = new hz.Vec3(0, 0, 0);
+    }
+
     if (!idKey) {
       console.error("[MonsterSpawnManager] Cannot handle death for controller with no ID Key!");
       // Attempt cleanup anyway

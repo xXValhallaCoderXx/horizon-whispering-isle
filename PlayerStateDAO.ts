@@ -11,7 +11,7 @@ export interface PlayerStateDaoState {
 }
 
 export const PLAYER_STATE_DAO_DEFAULT_STATE: PlayerStateDaoState = {
-  health: 100,
+  health: 110,
   strength: 10,
   agility: 10,
   intelligence: 10,
