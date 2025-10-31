@@ -327,27 +327,6 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
   }
 
 
-  // --- Late Join Sync ---
-  private onPlayerJoined = (player: hz.Player) => {
-    // Server only
-    if (!this.isOwnedByMe()) return;
-
-    const playerName = (player as any)?.alias || 'Unknown';
-
-
-    // Send the current health of all active monsters ONLY to the new player
-    for (const controller of this.activeMonsters) {
-      if (controller.isSpawned && controller.monsterIdKey) {
-        const payload = {
-          monsterId: controller.monsterIdKey,
-          currentHealth: controller.currentHealth,
-          maxHealth: controller.maxHealth,
-        };
-        // Send the health update event
-        this.sendNetworkBroadcastEvent(EventsService.CombatEvents.MonsterHealthUpdate, payload);
-      }
-    }
-  }
 
 
   // ---- Utility Functions ----
