@@ -247,7 +247,8 @@ class EnemySpawnManager extends hz.Component<typeof EnemySpawnManager> {
     controller.currentHealth -= damageAmount;
     controller.currentHealth = Math.max(0, controller.currentHealth); // Clamp health at 0
   
-    //   VisualFxBank.instance.playVFXAt("smoke_destroy_small", data.player.position.get(), 1.5);
+    SoundFxBank.instance.playSoundAt("melee_hit_sfx", data.player.position.get(), 0);
+    // VisualFxBank.instance.playVFXAt("sparkle_star", data.player.position.get(), 0);
     // Broadcast the health update to ALL players
     this.broadcastHealthUpdate(controller);
 

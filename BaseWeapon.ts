@@ -1,7 +1,6 @@
 import {
   Entity,
   Component,
-  AudioGizmo,
   Player,
   PropTypes,
   CodeBlockEvents,
@@ -11,9 +10,8 @@ import {
   EntityInteractionMode,
   LocalEvent,
   Vec3,
-  ParticleGizmo
 } from "horizon/core";
-import { EventsService } from "constants";
+import { EventsService, getWieldableConfig } from "constants";
 import { StartAttackingPlayer, StopAttackingPlayer } from "EnemyNPC";
 export const DamageEvent = new LocalEvent<{ amount: number }>();
 
@@ -21,6 +19,7 @@ export const DamageEvent = new LocalEvent<{ amount: number }>();
 export class BaseWeapon extends Component<typeof BaseWeapon> {
   static propsDefinition = {
     isDroppable: { type: PropTypes.Boolean, default: false },
+    weaponId: { type: PropTypes.String, default: "" },
     damage: { type: PropTypes.Number, default: 25 },
     reach: { type: PropTypes.Number, default: 2.0 },
     weight: { type: PropTypes.Number, default: 5 },
@@ -31,6 +30,18 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
   };
   private owner: Player | null = null;
 
+
+  private stats = {
+    damage: 25,
+    reach: 2.0,
+    weight: 5,
+    baseCooldownMs: 500,
+    weightMultiplier: 50,
+    hitCooldownMs: 100,
+    type: "",                // toolType for harvesting
+    swingDurationMs: undefined as number | undefined,
+  };
+
   private lastSwingTime: number = 0; // Track when the last swing occurred
   private isSwinging: boolean = false; // Track if currently swinging
 
@@ -40,7 +51,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
 
 
   preStart(): void {
-
+    this.loadStatsFromConfig();
 
     this.connectCodeBlockEvent(
       this.entity,
@@ -102,7 +113,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
   }
 
   private getSwingCooldown(): number {
-    return this.props.baseCooldownMs + (this.props.weight * this.props.weightMultiplier);
+    return this.stats.baseCooldownMs + (this.stats.weight * this.stats.weightMultiplier);
   }
 
   private canSwing(): boolean {
@@ -122,7 +133,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     }
     // Prevent rapid successive hits (debounce)
     const now = Date.now();
-    if (now - this.lastHitTime < this.props.hitCooldownMs) {
+    if (now - this.lastHitTime < this.stats.hitCooldownMs) {
       return;
     }
 
@@ -142,7 +153,8 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
 
       this.sendNetworkBroadcastEvent(EventsService.CombatEvents.MonsterTookDamage, {
         monsterId,
-        damage: this.props.damage,
+
+        damage: this.stats.damage,
         attackerId: this.toEntityIdString((this.owner as any)?.id) || undefined,
         player: this.owner,
       });
@@ -155,7 +167,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
       this.sendNetworkBroadcastEvent(EventsService.HarvestEvents.RequestTreeHit, {
         player: this.owner as Player,
         treeEntity: collideWith as Entity,
-        toolType: this.props.type,
+        toolType: this.stats.type,
         hitPosition: collideAt,
       });
       return;
@@ -169,7 +181,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
         oreEntity: collideWith as Entity,
         playerId: this.toEntityIdString((this.owner as any)?.id),
         oreEntityId: this.toEntityIdString((collideWith as any)?.id),
-        toolType: this.props.type,
+        toolType: this.stats.type,
         hitPosition: collideAt,
       });
       return;
@@ -206,8 +218,7 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
       .get()
       .playAvatarGripPoseAnimationByName(AvatarGripPoseAnimationNames.Fire);
 
-    const swingDuration = Math.max(150, 250 + (this.props.weight * 10)); // Minimum 150ms, increases with weight
-
+    const swingDuration = this.stats.swingDurationMs ?? Math.max(150, 250 + (this.stats.weight * 10)); // Minimum 150ms, increases with weight
     // End swing after duration
     this.async.setTimeout(() => {
       this.isSwinging = false;
@@ -285,5 +296,24 @@ export class BaseWeapon extends Component<typeof BaseWeapon> {
     const owner = this.entity.owner.get();
     return !!owner && owner === me;
   }
+
+
+
+
+  private loadStatsFromConfig() {
+    const id = (this.props.weaponId || this.props.type || "").toLowerCase();
+    const cfg = getWieldableConfig(id);
+    this.stats = {
+      damage: cfg?.damage ?? this.props.damage,
+      reach: cfg?.reach ?? this.props.reach,
+      weight: cfg?.weight ?? this.props.weight,
+      baseCooldownMs: cfg?.baseCooldownMs ?? this.props.baseCooldownMs,
+      weightMultiplier: cfg?.weightMultiplier ?? this.props.weightMultiplier,
+      hitCooldownMs: cfg?.hitCooldownMs ?? this.props.hitCooldownMs,
+      type: cfg?.toolType ?? (this.props.type || id || ""),
+      swingDurationMs: cfg?.swingDurationMs,
+    };
+  }
+
 }
 Component.register(BaseWeapon);

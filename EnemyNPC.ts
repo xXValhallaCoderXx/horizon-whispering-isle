@@ -447,66 +447,7 @@ class EnemyNPC extends BaseNPC<typeof EnemyNPC> {
 
   // ============== COMBAT SYSTEM ==============
 
-  // private onWeaponSwing(payload: any) {
-  //   const swingId = `${payload.weapon.id}_${Date.now()}`;
-  //   this.activeSwings.add(swingId);
 
-  //   this.async.setTimeout(() => {
-  //     this.activeSwings.delete(swingId);
-  //   }, payload.durationMs);
-
-  //   this.lastSwingData = {
-  //     weapon: payload.weapon,
-  //     owner: payload.owner,
-  //     damage: payload.damage,
-  //     reach: payload.reach || 2.0,
-  //     timestamp: Date.now()
-  //   };
-  // }
-
-  // private onWeaponCollision(weapon: hz.Entity) {
-  //   if (!this.lastSwingData || this.activeSwings.size === 0 || this.dead) return;
-
-  //   const timeSinceSwing = Date.now() - this.lastSwingData.timestamp;
-
-  //   if (weapon.id === this.lastSwingData.weapon.id && timeSinceSwing < 250) {
-  //     console.log(`[EnemyNPC] Valid hit! Dealing ${this.lastSwingData.damage} damage`);
-  //     this.takeDamage(this.lastSwingData.damage, this.lastSwingData.owner);
-
-  //     this.lastSwingData = null;
-  //     this.activeSwings.clear();
-  //   }
-  // }
-
-  private takeDamage(amount: number, attacker: hz.Player) {
-    if (this.dead) return;
-
-    const now = Date.now() / 1000.0;
-    if (now < this.lastHitTime + this.props.hitAnimDuration) return;
-
-    // Note: server-side managers handle damage networking.
-    // Provide local feedback only.
-
-    this.lastHitTime = now;
-    this.triggerHitAnimation();
-    this.applyKnockback(attacker, this.props.knockbackForce);
-
-    // console.error(`[EnemyNPC] Took ${amount} damage. HP: ${this.currentHitPoints}/${this.props.maxHitPoints}`);
-
-    // if (this.currentHitPoints <= 0) {
-    //   this.handleDeath();
-    // } else {
-    //   this.setState(EnemyNPCState.Hit);
-
-    //   // Aggro the attacker if not already aggressive towards them
-    //   if (!this.players.has(attacker)) {
-    //     this.onPlayerEnterAggroRange(attacker);
-    //   }
-    // }
-    if (!this.players.has(attacker)) {
-      this.onPlayerEnterAggroRange(attacker);
-    }
-  }
 
   private applyKnockback(attacker: hz.Player, force: number) {
     const attackerPos = attacker.position.get();

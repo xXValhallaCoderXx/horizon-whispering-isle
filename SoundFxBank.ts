@@ -19,6 +19,8 @@ export class SoundFxBank extends Component<typeof SoundFxBank> {
     oreCrumbleSfx: { type: PropTypes.Asset },
     meleeSwipeSfx: { type: PropTypes.Asset },
     chickenCluckSfx: { type: PropTypes.Asset },
+    meleeHitSfx: { type: PropTypes.Asset },
+    playerHitSfx: { type: PropTypes.Asset },
   };
 
   static instance: SoundFxBank;
@@ -40,6 +42,8 @@ export class SoundFxBank extends Component<typeof SoundFxBank> {
     this.spawnPoolHelper(this.props.oreCrumbleSfx as Asset, "ore_crumble_sfx", 3);
     this.spawnPoolHelper(this.props.meleeSwipeSfx as Asset, "melee_swipe_sfx", 3);
     this.spawnPoolHelper(this.props.chickenCluckSfx as Asset, "chicken_cluck_sfx", 3);
+    this.spawnPoolHelper(this.props.playerHitSfx as Asset, "player_hit_sfx", 3);
+    this.spawnPoolHelper(this.props.meleeHitSfx as Asset, "melee_hit_sfx", 3);
   }
 
   /**

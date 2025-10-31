@@ -766,3 +766,41 @@ export function processHarvestHit(currentHealth: number, cfg: NormalizedHarvestC
 
     return { damage, newHealth, perHitDrops, depleted, depletionDrops };
 }
+
+
+export type WieldableId = string;
+
+export interface WieldableConfig {
+    id: WieldableId;
+    label: string;
+    // Core stats
+    damage: number;
+    reach: number;
+    weight: number;
+    baseCooldownMs: number;
+    weightMultiplier: number;
+    hitCooldownMs: number;
+    // For harvest systems: must match TREE_TYPES/ORE_TYPES toolType
+    toolType: 'axe' | 'pickaxe' | 'sword' | 'hammer' | string;
+    // Optional explicit swing duration override
+    swingDurationMs?: number;
+}
+
+export const WIELDABLES: Record<WieldableId, WieldableConfig> = {
+    // AXES
+    axe_wood: { id: 'axe_wood', label: 'Wooden Axe', damage: 18, reach: 1.9, weight: 6, baseCooldownMs: 520, weightMultiplier: 50, hitCooldownMs: 110, toolType: 'axe' },
+
+    // PICKAXES
+    pickaxe_wood: { id: 'pickaxe_wood', label: 'Wooden Pickaxe', damage: 14, reach: 1.8, weight: 6.5, baseCooldownMs: 560, weightMultiplier: 55, hitCooldownMs: 125, toolType: 'pickaxe' },
+
+    // Future melee examples (kept for completeness)
+    sword_wood: { id: 'sword_wood', label: 'Wooden Sword', damage: 26, reach: 2.1, weight: 4.5, baseCooldownMs: 420, weightMultiplier: 42, hitCooldownMs: 90, toolType: 'sword' },
+    sword_mystical: { id: 'sword_mystical', label: 'Mystical Sword', damage: 34, reach: 2.3, weight: 4.8, baseCooldownMs: 400, weightMultiplier: 40, hitCooldownMs: 85, toolType: 'sword' },
+    hammer_iron: { id: 'hammer_iron', label: 'Iron Hammer', damage: 38, reach: 1.9, weight: 8.5, baseCooldownMs: 670, weightMultiplier: 62, hitCooldownMs: 135, toolType: 'hammer' },
+};
+
+export function getWieldableConfig(id?: string): WieldableConfig | undefined {
+    if (!id) return undefined;
+    const key = id.toLowerCase();
+    return WIELDABLES[key];
+}
